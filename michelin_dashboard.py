@@ -687,8 +687,8 @@ if not df_top_10.empty:
             
             fig = px.bar(
                 cuisine_price_avg,
-                x='Cuisine',
-                y='Avg_Price_Level',
+                x='菜系',
+                y='平均价格等级',
                 labels={'x': '菜系', 'y': '平均价格等级'},
                 color='Avg_Price_Level',
                 color_continuous_scale=COLOR_SCALES['price_scale']
@@ -935,4 +935,5 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
