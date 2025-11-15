@@ -702,7 +702,11 @@ if not df_top_10.empty:
                 paper_bgcolor='white',
                 # 设置x轴和y轴标签为中文
                 xaxis_title='菜系',
-                yaxis_title='平均价格等级'
+                yaxis_title='平均价格等级',
+                # 设置颜色条标题为中文
+                coloraxis_colorbar=dict(
+                    title='价格等级'
+                )
             )
             
             # 更新y轴格式显示两位小数
@@ -938,3 +942,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
