@@ -20,11 +20,13 @@
 
 ## 🚀 快速开始
 
+**克隆项目**
+```bash
+git clone https://github.com/224040010-cpu/Datavisual_Michelin.git
+cd Datavisual_Michelin
+```
 ### 安装依赖
 ```bash
 
 pip install -r requirements.txt
-1. **克隆项目**
-```bash
-git clone https://github.com/224040010-cpu/Datavisual_Michelin.git
-cd Datavisual_Michelin
+```
