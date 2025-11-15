@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import re
+import colorsys
 
 # 设置页面
 st.set_page_config(
@@ -121,18 +122,45 @@ COLOR_SCHEME = {
     'hover': '#f2f4f4'
 }
 
-# 红色系颜色序列
-CHART_COLORS = [
-    '#7d1d1d',  # 极深红
-    '#a52a2a',  # 深红
-    '#c0392b',  # 中深红
-    '#e74c3c',  # 主红
-    '#ec7063',  # 亮红
-    '#f1948a',  # 浅红
-    '#f5b7b1',  # 更浅红
-    '#fadbd8',  # 浅粉红
-    '#fdedec',  # 极浅粉红
-]
+# 生成动态红色系颜色序列
+def generate_red_colors(n_colors):
+    """生成n个不同的红色系颜色"""
+    base_reds = [
+        '#7d1d1d',  # 极深红
+        '#a52a2a',  # 深红
+        '#c0392b',  # 中深红
+        '#e74c3c',  # 主红
+        '#ec7063',  # 亮红
+        '#f1948a',  # 浅红
+        '#f5b7b1',  # 更浅红
+        '#fadbd8',  # 浅粉红
+        '#fdedec',  # 极浅粉红
+    ]
+    
+    if n_colors <= len(base_reds):
+        return base_reds[:n_colors]
+    
+    # 如果需要更多颜色，动态生成
+    colors = []
+    # 基础红色色调范围 (0-15度在色轮上)
+    hues = np.linspace(0, 15, min(n_colors, 20))  # 限制最大20种色调变化
+    
+    for i in range(n_colors):
+        # 使用HSL颜色空间生成变化
+        hue = hues[i % len(hues)] / 360.0  # 色调 (红色区域)
+        saturation = 0.7 - (i * 0.6 / n_colors)  # 饱和度从0.7到0.1
+        lightness = 0.3 + (i * 0.5 / n_colors)   # 亮度从0.3到0.8
+        
+        # 转换为RGB
+        rgb = colorsys.hls_to_rgb(hue, lightness, saturation)
+        hex_color = '#{:02x}{:02x}{:02x}'.format(
+            int(rgb[0] * 255),
+            int(rgb[1] * 255), 
+            int(rgb[2] * 255)
+        )
+        colors.append(hex_color)
+    
+    return colors
 
 # 红色系连续色阶
 COLOR_SCALES = {
@@ -172,13 +200,6 @@ COLOR_SCALES = {
         [1.0, '#a52a2a']     # 深红
     ]
 }
-
-# 离散颜色方案 - 用于分类数据
-DISCRETE_COLORS = [
-    '#7d1d1d', '#a52a2a', '#c0392b', '#e74c3c', '#ec7063',
-    '#f1948a', '#f5b7b1', '#fadbd8', '#fdedec', '#fef5f5',
-    '#2c3e50', '#34495e', '#5d6d7e', '#85929e', '#aeb6bf'
-]
 
 # 标题
 st.markdown('<h1 class="main-header">🍽️ 米其林餐厅全球分析</h1>', unsafe_allow_html=True)
@@ -544,14 +565,17 @@ with col_config1:
     top_n_cuisines = st.number_input(
         "选择显示菜系数量",
         min_value=5,
-        max_value=20,
+        max_value=30,  # 增加到30个菜系
         value=10,
         step=1,
-        help="选择要显示的前N个菜系数量"
+        help="选择要显示的前N个菜系数量（最多30个）"
     )
 
 # 获取前N菜系数据
 top_n_cuisines_list = get_top_cuisines_by_restaurants(df, top_n_cuisines)
+
+# 生成动态颜色序列
+dynamic_colors = generate_red_colors(len(top_n_cuisines_list))
 
 # 准备前N菜系数据
 df_top_n = df[df['Cuisine_list'].apply(
@@ -629,7 +653,7 @@ if not df_top_n.empty:
         if bubble_data:
             bubble_df = pd.DataFrame(bubble_data)
             
-            # 创建气泡图
+            # 创建气泡图 - 使用动态颜色
             fig = px.scatter(
                 bubble_df,
                 x='Cuisine',
@@ -644,7 +668,7 @@ if not df_top_n.empty:
                     'Award': '米其林评级',
                     'Count': '餐厅数量'
                 },
-                color_discrete_sequence=DISCRETE_COLORS[:len(top_n_cuisines_list)]
+                color_discrete_sequence=dynamic_colors  # 使用动态生成的红色系颜色
             )
             
             # 自定义气泡大小范围，确保可视化效果
@@ -889,7 +913,7 @@ if not df_top_n.empty:
                 'Avg_Award_Score': '平均星级评分',
                 'Restaurant_Count': '餐厅数量'
             },
-            color_discrete_sequence=DISCRETE_COLORS  # 使用红色系离散颜色序列
+            color_discrete_sequence=dynamic_colors  # 使用动态生成的红色系颜色
         )
         
         fig.update_layout(
