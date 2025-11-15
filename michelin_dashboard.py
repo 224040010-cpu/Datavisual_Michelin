@@ -162,20 +162,19 @@ def generate_red_colors(n_colors):
     
     return colors
 
-# 红色系连续色阶 - 优化为更适合小数值的色阶
+# 红色系连续色阶
 COLOR_SCALES = {
     'reds': [
-        [0.0, '#fef5f5'],  # 非常浅红
-        [0.1, '#fdedec'],  # 极浅粉红
-        [0.2, '#fadbd8'],  # 浅粉红
+        [0.0, '#fdedec'],  # 极浅粉红
+        [0.1, '#fadbd8'],  # 浅粉红
         [0.3, '#f5b7b1'],  # 更浅红
-        [0.4, '#f1948a'],  # 浅红
-        [0.6, '#ec7063'],  # 亮红
-        [0.8, '#e74c3c'],  # 主红
+        [0.5, '#f1948a'],  # 浅红
+        [0.7, '#ec7063'],  # 亮红
+        [0.85, '#e74c3c'], # 主红
         [1.0, '#c0392b']   # 中深红
     ],
     'sequential': [
-        [0.0, '#fef5f5'],
+        [0.0, '#fdedec'],
         [0.2, '#fadbd8'], 
         [0.4, '#f1948a'],
         [0.6, '#e74c3c'],
@@ -183,7 +182,7 @@ COLOR_SCALES = {
         [1.0, '#7d1d1d']
     ],
     'price_scale': [
-        [0.0, "#fef5f5"],    # 非常浅红
+        [0.0, "#fdedec"],    # 极浅粉红
         [0.2, "#f5b7b1"],    # 更浅红
         [0.4, "#e74c3c"],    # 主红
         [0.6, "#c0392b"],    # 中红
@@ -197,17 +196,6 @@ COLOR_SCALES = {
         [0.45, '#f5b7b1'],   # 更浅红
         [0.6, '#f1948a'],    # 浅红
         [0.75, '#e74c3c'],   # 主红
-        [0.9, '#c0392b'],    # 中红
-        [1.0, '#a52a2a']     # 深红
-    ],
-    'map_colors': [
-        [0.0, '#fef5f5'],    # 非常浅红 - 确保最小值可见
-        [0.05, '#fdedec'],   # 极浅粉红
-        [0.1, '#fadbd8'],    # 浅粉红
-        [0.2, '#f5b7b1'],    # 更浅红
-        [0.3, '#f1948a'],    # 浅红
-        [0.5, '#ec7063'],    # 亮红
-        [0.7, '#e74c3c'],    # 主红
         [0.9, '#c0392b'],    # 中红
         [1.0, '#a52a2a']     # 深红
     ]
@@ -471,8 +459,7 @@ with col4:
     </div>
     """, unsafe_allow_html=True)
 
-# 大洲地图展示 - 优化颜色分布，确保小数值可见
-# 大洲地图展示 - 优化颜色分布，确保小数值可见
+# 大洲地图展示 - 修改为红色系
 st.markdown('<h2 class="section-header">🗺️ 大洲餐厅分布</h2>', unsafe_allow_html=True)
 
 if selected_continent != '全部':
@@ -494,61 +481,26 @@ if selected_continent != '全部':
         continent_cities = continent_cities.dropna(subset=['Lat', 'Lon'])
         
         if not continent_cities.empty:
-            # 确保即使餐厅数量很少也能清楚看到
-            min_count = continent_cities['Count'].min()
-            max_count = continent_cities['Count'].max()
-            
-            # 如果数据范围很小，调整颜色映射范围
-            if max_count - min_count <= 5:
-                # 小范围数据，使用更敏感的颜色映射
-                color_range = [min_count, max(max_count, min_count + 1)]
-            else:
-                color_range = [min_count, max_count]
-            
-            # 创建大洲地图 - 使用优化后的红色系颜色方案
+            # 创建大洲地图 - 使用红色系颜色方案
             fig = px.scatter_mapbox(
                 continent_cities,
                 lat='Lat',
                 lon='Lon',
                 size='Count',
                 hover_name='City',
-                hover_data={'Count': True, 'City': False},
-                size_max=30,
+                hover_data={'Count': True},
+                size_max=25,
                 color='Count',
-                color_continuous_scale=COLOR_SCALES['map_colors'],  # 使用优化后的地图颜色方案
-                range_color=color_range,  # 设置颜色范围
+                color_continuous_scale=COLOR_SCALES['reds'],  # 使用红色系颜色方案
                 zoom=3,
                 title=f"{selected_continent} 米其林餐厅分布 - 价格等级: {current_description}"
-            )
-            
-            # 修复：直接在创建图表时设置marker属性，而不是使用update_traces
-            fig.update_traces(
-                marker=dict(
-                    sizemin=8,  # 最小气泡大小
-                    opacity=0.8,
-                    line=dict(width=1, color='white')
-                )
             )
             
             fig.update_layout(
                 mapbox_style="open-street-map",
                 height=500,
                 margin=dict(l=0, r=0, t=30, b=0),
-                paper_bgcolor='white',
-                coloraxis_colorbar=dict(
-                    title="餐厅数量",
-                    thickness=15,
-                    len=0.8
-                )
-            )
-            
-            # 更新悬停信息为中文
-            fig.update_traces(
-                hovertemplate=(
-                    "<b>%{hovertext}</b><br>" +
-                    "餐厅数量: %{marker.color}<br>" +
-                    "<extra></extra>"
-                )
+                paper_bgcolor='white'
             )
             
             st.plotly_chart(fig, use_container_width=True)
@@ -557,7 +509,7 @@ if selected_continent != '全部':
     else:
         st.info(f"暂无 {selected_continent} 的地图数据")
 else:
-    # 显示全球视图 - 同样优化颜色分布
+    # 显示全球视图
     if not filtered_df.empty:
         # 获取所有城市的统计数据
         city_counts = filtered_df['City'].value_counts().reset_index()
@@ -575,59 +527,25 @@ else:
         city_counts = city_counts.dropna(subset=['Lat', 'Lon'])
         
         if not city_counts.empty:
-            # 确保即使餐厅数量很少也能清楚看到
-            min_count = city_counts['Count'].min()
-            max_count = city_counts['Count'].max()
-            
-            # 如果数据范围很小，调整颜色映射范围
-            if max_count - min_count <= 5:
-                color_range = [min_count, max(max_count, min_count + 1)]
-            else:
-                color_range = [min_count, max_count]
-            
             fig = px.scatter_mapbox(
                 city_counts,
                 lat='Lat',
                 lon='Lon',
                 size='Count',
                 hover_name='City',
-                hover_data={'Count': True, 'City': False},
-                size_max=25,
+                hover_data={'Count': True},
+                size_max=20,
                 color='Count',
-                color_continuous_scale=COLOR_SCALES['map_colors'],  # 使用优化后的地图颜色方案
-                range_color=color_range,  # 设置颜色范围
+                color_continuous_scale=COLOR_SCALES['reds'],  # 使用红色系颜色方案
                 zoom=1,
                 title=f"全球米其林餐厅分布 - 价格等级: {current_description}"
-            )
-            
-            # 修复：直接在创建图表时设置marker属性
-            fig.update_traces(
-                marker=dict(
-                    sizemin=6,  # 全球视图的最小气泡大小稍小
-                    opacity=0.7,
-                    line=dict(width=1, color='white')
-                )
             )
             
             fig.update_layout(
                 mapbox_style="open-street-map",
                 height=500,
                 margin=dict(l=0, r=0, t=30, b=0),
-                paper_bgcolor='white',
-                coloraxis_colorbar=dict(
-                    title="餐厅数量",
-                    thickness=15,
-                    len=0.8
-                )
-            )
-            
-            # 更新悬停信息为中文
-            fig.update_traces(
-                hovertemplate=(
-                    "<b>%{hovertext}</b><br>" +
-                    "餐厅数量: %{marker.color}<br>" +
-                    "<extra></extra>"
-                )
+                paper_bgcolor='white'
             )
             
             st.plotly_chart(fig, use_container_width=True)
@@ -792,7 +710,7 @@ if not df_top_n.empty:
     
     with col1:
         st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系平均价格等级</h3>', unsafe_allow_html=True)
-        
+    
         # 计算每个菜系的平均价格等级
         cuisine_price_data = []
         for cuisine in top_n_cuisines_list:
@@ -802,14 +720,14 @@ if not df_top_n.empty:
             if len(cuisine_restaurants) > 0:
                 avg_price = cuisine_restaurants['Price_level'].mean()
                 cuisine_price_data.append({'Cuisine': cuisine, 'Avg_Price_Level': avg_price})
-        
+    
         if cuisine_price_data:
             cuisine_price_avg = pd.DataFrame(cuisine_price_data)
             cuisine_price_avg = cuisine_price_avg.sort_values('Avg_Price_Level', ascending=False)
-            
+        
             # 保留两位小数
             cuisine_price_avg['Avg_Price_Level'] = cuisine_price_avg['Avg_Price_Level'].round(2)
-            
+        
             fig = px.bar(
                 cuisine_price_avg,
                 x='Cuisine',
@@ -817,7 +735,7 @@ if not df_top_n.empty:
                 color='Avg_Price_Level',
                 color_continuous_scale=COLOR_SCALES['price_scale']
             )
-            
+        
             # 更新图表布局，设置中文标签
             fig.update_layout(
                 height=400,
@@ -833,7 +751,7 @@ if not df_top_n.empty:
                     title='平均价格等级'
                 )
             )
-            
+        
             # 更新悬停信息为中文
             fig.update_traces(
                 hovertemplate=(
@@ -842,10 +760,10 @@ if not df_top_n.empty:
                     "<extra></extra>"
                 )
             )
-            
+        
             # 更新y轴格式显示两位小数
             fig.update_yaxes(tickformat=".2f")
-            
+        
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("暂无价格等级数据")
