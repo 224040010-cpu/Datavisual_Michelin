@@ -25,9 +25,15 @@
 git clone https://github.com/224040010-cpu/Datavisual_Michelin.git
 cd Datavisual_Michelin
 ```
+
 **安装依赖**
 ```bash
-
 pip install -r requirements.txt
 ```
+
+**运行应用**
+```bash
+streamlit run michelin_dashboard.py
+```
+
 
