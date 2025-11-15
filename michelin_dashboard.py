@@ -569,7 +569,7 @@ if not df_top_10.empty:
             x=cuisine_counts,
             y=cuisine_names,
             orientation='h',
-            labels={'x': '餐厅数量', 'y': ''},
+            labels={'x': '餐厅数量', 'y': '前十菜系'},
             color=cuisine_counts,
             color_continuous_scale=COLOR_SCALES['sequential']  # 使用红色系颜色方案
         )
@@ -578,7 +578,10 @@ if not df_top_10.empty:
             showlegend=False,
             height=400,
             margin=dict(l=0, r=0, t=0, b=0),
-            paper_bgcolor='white'
+            paper_bgcolor='white',
+            coloraxis_colorbar=dict(
+                    title='颜色'
+                )
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -705,7 +708,7 @@ if not df_top_10.empty:
                 yaxis_title='平均价格等级',
                 # 设置颜色条标题为中文
                 coloraxis_colorbar=dict(
-                    title='价格等级'
+                    title='平均价格等级'
                 )
             )
             
@@ -942,4 +945,5 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
