@@ -569,7 +569,7 @@ if not df_top_10.empty:
             x=cuisine_counts,
             y=cuisine_names,
             orientation='h',
-            labels={'x': '餐厅数量', 'y': '前十菜系'},
+            labels={'x': '餐厅数量', 'y': '菜系'},
             color=cuisine_counts,
             color_continuous_scale=COLOR_SCALES['sequential']  # 使用红色系颜色方案
         )
@@ -945,5 +945,6 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
 
