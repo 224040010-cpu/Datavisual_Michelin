@@ -547,51 +547,41 @@ if not df_top_10.empty:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系平均价格等级</h3>', unsafe_allow_html=True)
+        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系餐厅数量</h3>', unsafe_allow_html=True)
         
-        # 计算每个菜系的平均价格等级
-        cuisine_price_data = []
-        for cuisine in top_10_cuisines:
-            cuisine_restaurants = df[df['Cuisine_list'].apply(
-                lambda x: cuisine in x if isinstance(x, list) else False
-            )]
-            if len(cuisine_restaurants) > 0:
-                avg_price = cuisine_restaurants['Price_level'].mean()
-                cuisine_price_data.append({'Cuisine': cuisine, 'Avg_Price_Level': avg_price})
+        # 计算每个菜系的餐厅数量（基于餐厅计数，不是菜系出现次数）
+        cuisine_restaurant_count = {}
+        for idx, row in df.iterrows():
+            if isinstance(row['Cuisine_list'], list):
+                for cuisine in row['Cuisine_list']:
+                    if cuisine in top_10_cuisines:
+                        if cuisine in cuisine_restaurant_count:
+                            cuisine_restaurant_count[cuisine] += 1
+                        else:
+                            cuisine_restaurant_count[cuisine] = 1
         
-        if cuisine_price_data:
-            cuisine_price_avg = pd.DataFrame(cuisine_price_data)
-            cuisine_price_avg = cuisine_price_avg.sort_values('Avg_Price_Level', ascending=False)
-            
-            # 保留两位小数
-            cuisine_price_avg['Avg_Price_Level'] = cuisine_price_avg['Avg_Price_Level'].round(2)
-            
-            fig = px.bar(
-                cuisine_price_avg,
-                x='Cuisine',
-                y='Avg_Price_Level',
-                color='Avg_Price_Level',
-                color_continuous_scale=COLOR_SCALES['price_scale']
-            )
-            
-            # 更新图表布局，设置中文标签
-            fig.update_layout(
-                height=400,
-                margin=dict(l=0, r=0, t=0, b=0),
-                xaxis_tickangle=-45,
-                showlegend=False,
-                paper_bgcolor='white',
-                # 设置x轴和y轴标签为中文
-                xaxis_title='菜系',
-                yaxis_title='平均价格等级'
-            )
-            
-            # 更新y轴格式显示两位小数
-            fig.update_yaxes(tickformat=".2f")
-            
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("暂无价格等级数据")
+        # 按餐厅数量排序
+        sorted_cuisines = sorted(cuisine_restaurant_count.items(), key=lambda x: x[1], reverse=True)
+        cuisine_names = [cuisine for cuisine, count in sorted_cuisines]
+        cuisine_counts = [count for cuisine, count in sorted_cuisines]
+        
+        fig = px.bar(
+            x=cuisine_counts,
+            y=cuisine_names,
+            orientation='h',
+            labels={'x': '餐厅数量', 'y': ''},
+            color=cuisine_counts,
+            color_continuous_scale=COLOR_SCALES['sequential']  # 使用红色系颜色方案
+        )
+        
+        fig.update_layout(
+            showlegend=False,
+            height=400,
+            margin=dict(l=0, r=0, t=0, b=0),
+            paper_bgcolor='white'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
     
     with col2:
         st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系与星级分布</h3>', unsafe_allow_html=True)
@@ -699,17 +689,20 @@ if not df_top_10.empty:
                 cuisine_price_avg,
                 x='Cuisine',
                 y='Avg_Price_Level',
-                labels={'x': '菜系', 'y': '平均价格等级'},
                 color='Avg_Price_Level',
                 color_continuous_scale=COLOR_SCALES['price_scale']
             )
             
+            # 更新图表布局，设置中文标签
             fig.update_layout(
                 height=400,
                 margin=dict(l=0, r=0, t=0, b=0),
                 xaxis_tickangle=-45,
                 showlegend=False,
-                paper_bgcolor='white'
+                paper_bgcolor='white',
+                # 设置x轴和y轴标签为中文
+                xaxis_title='菜系',
+                yaxis_title='平均价格等级'
             )
             
             # 更新y轴格式显示两位小数
@@ -718,7 +711,7 @@ if not df_top_10.empty:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("暂无价格等级数据")
-    
+            
     with col2:
         st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系星级评分分布</h3>', unsafe_allow_html=True)
         
@@ -945,7 +938,3 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-
-
-
-
