@@ -472,6 +472,7 @@ with col4:
     """, unsafe_allow_html=True)
 
 # 大洲地图展示 - 优化颜色分布，确保小数值可见
+# 大洲地图展示 - 优化颜色分布，确保小数值可见
 st.markdown('<h2 class="section-header">🗺️ 大洲餐厅分布</h2>', unsafe_allow_html=True)
 
 if selected_continent != '全部':
@@ -520,7 +521,7 @@ if selected_continent != '全部':
                 title=f"{selected_continent} 米其林餐厅分布 - 价格等级: {current_description}"
             )
             
-            # 优化气泡大小，确保小数值也能看到
+            # 修复：直接在创建图表时设置marker属性，而不是使用update_traces
             fig.update_traces(
                 marker=dict(
                     sizemin=8,  # 最小气泡大小
@@ -599,7 +600,7 @@ else:
                 title=f"全球米其林餐厅分布 - 价格等级: {current_description}"
             )
             
-            # 优化气泡大小
+            # 修复：直接在创建图表时设置marker属性
             fig.update_traces(
                 marker=dict(
                     sizemin=6,  # 全球视图的最小气泡大小稍小
@@ -1075,3 +1076,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
