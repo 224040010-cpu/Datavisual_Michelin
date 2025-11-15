@@ -291,7 +291,7 @@ def get_unique_cuisines(df):
     unique_cuisines = sorted(list(set(all_cuisines)))
     return unique_cuisines
 
-# 获取前10菜系（基于餐厅计数，不是菜系出现次数）
+# 获取前N菜系（基于餐厅计数，不是菜系出现次数）
 @st.cache_data
 def get_top_cuisines_by_restaurants(df, top_n=10):
     """获取基于餐厅数量的前N大菜系"""
@@ -313,7 +313,6 @@ def get_top_cuisines_by_restaurants(df, top_n=10):
 
 # 获取数据
 unique_cuisines = get_unique_cuisines(df)
-top_10_cuisines = get_top_cuisines_by_restaurants(df, 10)
 
 # 侧边栏过滤器
 st.sidebar.header("🔍 数据筛选")
@@ -334,7 +333,7 @@ selected_city = st.sidebar.selectbox("选择城市", available_cities)
 selected_cuisines = st.sidebar.multiselect(
     "选择菜系（可多选）",
     options=unique_cuisines,
-    default=top_10_cuisines[:3] if top_10_cuisines else []
+    default=[]
 )
 
 # 米其林评级筛选
@@ -418,7 +417,7 @@ with col2:
     """, unsafe_allow_html=True)
 
 with col3:
-    selected_cuisines_count = len(selected_cuisines) if selected_cuisines else len(top_10_cuisines)
+    selected_cuisines_count = len(selected_cuisines) if selected_cuisines else 0
     st.markdown(f"""
     <div class="metric-card">
         <h3>选中菜系</h3>
@@ -534,27 +533,44 @@ else:
     else:
         st.info("请选择筛选条件来查看地图分布")
 
-# 前10菜系的多维度分析
-st.markdown('<h2 class="section-header">📈 前10菜系深度分析</h2>', unsafe_allow_html=True)
+# 前N菜系的多维度分析
+st.markdown('<h2 class="section-header">📈 菜系深度分析</h2>', unsafe_allow_html=True)
 
-# 准备前10菜系数据 - 使用基于餐厅数量的统计
-df_top_10 = df[df['Cuisine_list'].apply(
-    lambda x: any(cuisine in x for cuisine in top_10_cuisines) if isinstance(x, list) else False
+# 添加菜系数量选择器
+col_config1, col_config2 = st.columns([1, 4])
+
+with col_config1:
+    # 菜系数量选择旋钮
+    top_n_cuisines = st.number_input(
+        "选择显示菜系数量",
+        min_value=5,
+        max_value=20,
+        value=10,
+        step=1,
+        help="选择要显示的前N个菜系数量"
+    )
+
+# 获取前N菜系数据
+top_n_cuisines_list = get_top_cuisines_by_restaurants(df, top_n_cuisines)
+
+# 准备前N菜系数据
+df_top_n = df[df['Cuisine_list'].apply(
+    lambda x: any(cuisine in x for cuisine in top_n_cuisines_list) if isinstance(x, list) else False
 )]
 
-if not df_top_10.empty:
+if not df_top_n.empty:
     # 第一行：菜系分布和评级关系
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系餐厅数量</h3>', unsafe_allow_html=True)
+        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系餐厅数量</h3>', unsafe_allow_html=True)
         
         # 计算每个菜系的餐厅数量（基于餐厅计数，不是菜系出现次数）
         cuisine_restaurant_count = {}
         for idx, row in df.iterrows():
             if isinstance(row['Cuisine_list'], list):
                 for cuisine in row['Cuisine_list']:
-                    if cuisine in top_10_cuisines:
+                    if cuisine in top_n_cuisines_list:
                         if cuisine in cuisine_restaurant_count:
                             cuisine_restaurant_count[cuisine] += 1
                         else:
@@ -580,14 +596,14 @@ if not df_top_10.empty:
             margin=dict(l=0, r=0, t=0, b=0),
             paper_bgcolor='white',
             coloraxis_colorbar=dict(
-                    title='颜色'
-                )
+                title='餐厅数量'
+            )
         )
         
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系与星级分布</h3>', unsafe_allow_html=True)
+        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系与星级分布</h3>', unsafe_allow_html=True)
         
         # 创建菜系与评级的气泡图数据
         bubble_data = []
@@ -595,7 +611,7 @@ if not df_top_10.empty:
         # 定义评级顺序
         award_order = ['Bib Gourmand', '1 Star', '2 Stars', '3 Stars']
         
-        for cuisine in top_10_cuisines:
+        for cuisine in top_n_cuisines_list:
             for award in award_order:
                 # 计算该菜系在该评级下的餐厅数量
                 count = len(df[df['Cuisine_list'].apply(
@@ -628,7 +644,7 @@ if not df_top_10.empty:
                     'Award': '米其林评级',
                     'Count': '餐厅数量'
                 },
-                color_discrete_sequence=DISCRETE_COLORS[:len(top_10_cuisines)]
+                color_discrete_sequence=DISCRETE_COLORS[:len(top_n_cuisines_list)]
             )
             
             # 自定义气泡大小范围，确保可视化效果
@@ -669,11 +685,11 @@ if not df_top_10.empty:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系平均价格等级</h3>', unsafe_allow_html=True)
+        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系平均价格等级</h3>', unsafe_allow_html=True)
         
         # 计算每个菜系的平均价格等级
         cuisine_price_data = []
-        for cuisine in top_10_cuisines:
+        for cuisine in top_n_cuisines_list:
             cuisine_restaurants = df[df['Cuisine_list'].apply(
                 lambda x: cuisine in x if isinstance(x, list) else False
             )]
@@ -720,14 +736,14 @@ if not df_top_10.empty:
             st.info("暂无价格等级数据")
             
     with col2:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系星级评分分布</h3>', unsafe_allow_html=True)
+        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系星级评分分布</h3>', unsafe_allow_html=True)
         
         # 定义星级评分映射 - 排除Bib Gourmand
         award_mapping = {'1 Star': 1, '2 Stars': 2, '3 Stars': 3}
         
         # 计算每个菜系的平均星级评分和餐厅数量（只计算有星级的餐厅）
         cuisine_award_data = []
-        for cuisine in top_10_cuisines:
+        for cuisine in top_n_cuisines_list:
             cuisine_restaurants = df[df['Cuisine_list'].apply(
                 lambda x: cuisine in x if isinstance(x, list) else False
             )]
@@ -823,14 +839,14 @@ if not df_top_10.empty:
             st.info("暂无星级评分数据")
     
     # 第三行：综合关系气泡图
-    st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系综合关系分析</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系综合关系分析</h3>', unsafe_allow_html=True)
     
     # 定义星级评分映射（用于综合关系分析）- 排除Bib Gourmand
     award_mapping = {'1 Star': 1, '2 Stars': 2, '3 Stars': 3}
     
     # 计算综合统计数据
     cuisine_stats_data = []
-    for cuisine in top_10_cuisines:
+    for cuisine in top_n_cuisines_list:
         cuisine_restaurants = df[df['Cuisine_list'].apply(
             lambda x: cuisine in x if isinstance(x, list) else False
         )]
@@ -892,7 +908,7 @@ if not df_top_10.empty:
         st.info("暂无综合统计数据")
 
 else:
-    st.info("暂无前10菜系数据")
+    st.info("暂无菜系数据")
 
 # 数据表格
 st.markdown('<h2 class="section-header">📋 餐厅详情</h2>', unsafe_allow_html=True)
@@ -945,6 +961,3 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-
-
-
