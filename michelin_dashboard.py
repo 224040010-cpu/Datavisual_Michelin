@@ -709,55 +709,64 @@ if not df_top_n.empty:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系平均价格等级</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系平均价格等级</h3>', unsafe_allow_html=True)
+    
+    # 计算每个菜系的平均价格等级
+    cuisine_price_data = []
+    for cuisine in top_n_cuisines_list:
+        cuisine_restaurants = df[df['Cuisine_list'].apply(
+            lambda x: cuisine in x if isinstance(x, list) else False
+        )]
+        if len(cuisine_restaurants) > 0:
+            avg_price = cuisine_restaurants['Price_level'].mean()
+            cuisine_price_data.append({'Cuisine': cuisine, 'Avg_Price_Level': avg_price})
+    
+    if cuisine_price_data:
+        cuisine_price_avg = pd.DataFrame(cuisine_price_data)
+        cuisine_price_avg = cuisine_price_avg.sort_values('Avg_Price_Level', ascending=False)
         
-        # 计算每个菜系的平均价格等级
-        cuisine_price_data = []
-        for cuisine in top_n_cuisines_list:
-            cuisine_restaurants = df[df['Cuisine_list'].apply(
-                lambda x: cuisine in x if isinstance(x, list) else False
-            )]
-            if len(cuisine_restaurants) > 0:
-                avg_price = cuisine_restaurants['Price_level'].mean()
-                cuisine_price_data.append({'Cuisine': cuisine, 'Avg_Price_Level': avg_price})
+        # 保留两位小数
+        cuisine_price_avg['Avg_Price_Level'] = cuisine_price_avg['Avg_Price_Level'].round(2)
         
-        if cuisine_price_data:
-            cuisine_price_avg = pd.DataFrame(cuisine_price_data)
-            cuisine_price_avg = cuisine_price_avg.sort_values('Avg_Price_Level', ascending=False)
-            
-            # 保留两位小数
-            cuisine_price_avg['Avg_Price_Level'] = cuisine_price_avg['Avg_Price_Level'].round(2)
-            
-            fig = px.bar(
-                cuisine_price_avg,
-                x='Cuisine',
-                y='Avg_Price_Level',
-                color='Avg_Price_Level',
-                color_continuous_scale=COLOR_SCALES['price_scale']
+        fig = px.bar(
+            cuisine_price_avg,
+            x='Cuisine',
+            y='Avg_Price_Level',
+            color='Avg_Price_Level',
+            color_continuous_scale=COLOR_SCALES['price_scale']
+        )
+        
+        # 更新图表布局，设置中文标签
+        fig.update_layout(
+            height=400,
+            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis_tickangle=-45,
+            showlegend=False,
+            paper_bgcolor='white',
+            # 设置x轴和y轴标签为中文
+            xaxis_title='菜系',
+            yaxis_title='平均价格等级',
+            # 设置颜色条标题为中文
+            coloraxis_colorbar=dict(
+                title='平均价格等级'
             )
-            
-            # 更新图表布局，设置中文标签
-            fig.update_layout(
-                height=400,
-                margin=dict(l=0, r=0, t=0, b=0),
-                xaxis_tickangle=-45,
-                showlegend=False,
-                paper_bgcolor='white',
-                # 设置x轴和y轴标签为中文
-                xaxis_title='菜系',
-                yaxis_title='平均价格等级',
-                # 设置颜色条标题为中文
-                coloraxis_colorbar=dict(
-                    title='平均价格等级'
-                )
+        )
+        
+        # 更新悬停信息为中文
+        fig.update_traces(
+            hovertemplate=(
+                "<b>%{x}</b><br>" +
+                "平均价格等级: %{y:.2f}<br>" +
+                "<extra></extra>"
             )
-            
-            # 更新y轴格式显示两位小数
-            fig.update_yaxes(tickformat=".2f")
-            
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("暂无价格等级数据")
+        )
+        
+        # 更新y轴格式显示两位小数
+        fig.update_yaxes(tickformat=".2f")
+        
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("暂无价格等级数据")
             
     with col2:
         st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系星级评分分布</h3>', unsafe_allow_html=True)
@@ -985,3 +994,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
