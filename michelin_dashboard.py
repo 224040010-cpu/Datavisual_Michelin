@@ -439,124 +439,12 @@ with col4:
     </div>
     """, unsafe_allow_html=True)
 
-# 地图类型选择
-st.sidebar.markdown("---")
-st.sidebar.subheader("🗺️ 地图设置")
-map_type = st.sidebar.selectbox(
-    "选择地图类型",
-    ["快速静态地图", "交互式地图", "极简地图"],
-    index=0,
-    help="快速静态地图加载最快，交互式地图功能最丰富"
-)
-
-# 大洲地图展示 - 改进版本
+# 大洲地图展示 - 使用更快的地图样式
 st.markdown('<h2 class="section-header">🗺️ 大洲餐厅分布</h2>', unsafe_allow_html=True)
 
-def create_fast_static_map(city_data, title):
-    """创建快速静态地图"""
-    # 使用简单的散点图模拟地图效果
-    fig = px.scatter(
-        city_data,
-        x='Lon',
-        y='Lat',
-        size='Count',
-        color='Count',
-        hover_name='City',
-        hover_data={'Count': True, 'Lon': False, 'Lat': False},
-        size_max=30,
-        color_continuous_scale=COLOR_SCALES['reds'],
-        title=title
-    )
-    
-    # 设置图表样式，模拟地图背景
-    fig.update_layout(
-        height=500,
-        margin=dict(l=0, r=0, t=40, b=0),
-        paper_bgcolor='#f8f9fa',
-        plot_bgcolor='#f8f9fa',
-        xaxis=dict(
-            title='经度',
-            showgrid=False,
-            zeroline=False,
-            showticklabels=False
-        ),
-        yaxis=dict(
-            title='纬度', 
-            showgrid=False,
-            zeroline=False,
-            showticklabels=False
-        )
-    )
-    
-    # 添加网格线模拟地图
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#e9ecef')
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#e9ecef')
-    
-    return fig
-
-def create_interactive_map(city_data, title):
-    """创建交互式地图 - 使用更快的地图样式"""
-    fig = px.scatter_mapbox(
-        city_data,
-        lat='Lat',
-        lon='Lon',
-        size='Count',
-        hover_name='City',
-        hover_data={'Count': True},
-        size_max=25,
-        color='Count',
-        color_continuous_scale=COLOR_SCALES['reds'],
-        zoom=1,
-        title=title
-    )
-    
-    # 使用更快的地图样式
-    fig.update_layout(
-        mapbox_style="carto-positron",  # 或者 "stamen-toner", "white-bg"
-        height=500,
-        margin=dict(l=0, r=0, t=40, b=0),
-        paper_bgcolor='white'
-    )
-    
-    return fig
-
-def create_minimal_map(city_data, title):
-    """创建极简地图"""
-    fig = px.scatter_geo(
-        city_data,
-        lat='Lat',
-        lon='Lon',
-        size='Count',
-        hover_name='City',
-        hover_data={'Count': True},
-        size_max=30,
-        color='Count',
-        color_continuous_scale=COLOR_SCALES['reds'],
-        title=title
-    )
-    
-    fig.update_layout(
-        height=500,
-        margin=dict(l=0, r=0, t=40, b=0),
-        geo=dict(
-            showland=True,
-            landcolor='#f8f9fa',
-            showocean=True,
-            oceancolor='#e9ecef',
-            showcountries=True,
-            countrycolor='#dee2e6',
-            showframe=False,
-            projection_type='equirectangular'
-        ),
-        paper_bgcolor='white'
-    )
-    
-    return fig
-
-# 准备地图数据
-continent_coords = get_continent_coordinates()
-
 if selected_continent != '全部':
+    continent_coords = get_continent_coordinates()
+    
     if selected_continent in continent_coords:
         # 获取该大洲的城市数据
         continent_cities = filtered_df[filtered_df['Continent'] == selected_continent]['City'].value_counts().reset_index()
@@ -573,14 +461,28 @@ if selected_continent != '全部':
         continent_cities = continent_cities.dropna(subset=['Lat', 'Lon'])
         
         if not continent_cities.empty:
-            title = f"{selected_continent} 米其林餐厅分布 - 价格等级: {current_description}"
+            # 创建大洲地图 - 使用更快的地图样式
+            fig = px.scatter_mapbox(
+                continent_cities,
+                lat='Lat',
+                lon='Lon',
+                size='Count',
+                hover_name='City',
+                hover_data={'Count': True},
+                size_max=25,
+                color='Count',
+                color_continuous_scale=COLOR_SCALES['reds'],
+                zoom=3,
+                title=f"{selected_continent} 米其林餐厅分布 - 价格等级: {current_description}"
+            )
             
-            if map_type == "快速静态地图":
-                fig = create_fast_static_map(continent_cities, title)
-            elif map_type == "交互式地图":
-                fig = create_interactive_map(continent_cities, title)
-            else:  # 极简地图
-                fig = create_minimal_map(continent_cities, title)
+            # 使用更快的地图样式
+            fig.update_layout(
+                mapbox_style="carto-positron",  # 更快的轻量级地图
+                height=500,
+                margin=dict(l=0, r=0, t=30, b=0),
+                paper_bgcolor='white'
+            )
             
             st.plotly_chart(fig, use_container_width=True)
         else:
@@ -606,34 +508,33 @@ else:
         city_counts = city_counts.dropna(subset=['Lat', 'Lon'])
         
         if not city_counts.empty:
-            title = f"全球米其林餐厅分布 - 价格等级: {current_description}"
+            # 使用更快的地图样式
+            fig = px.scatter_mapbox(
+                city_counts,
+                lat='Lat',
+                lon='Lon',
+                size='Count',
+                hover_name='City',
+                hover_data={'Count': True},
+                size_max=20,
+                color='Count',
+                color_continuous_scale=COLOR_SCALES['reds'],
+                zoom=1,
+                title=f"全球米其林餐厅分布 - 价格等级: {current_description}"
+            )
             
-            if map_type == "快速静态地图":
-                fig = create_fast_static_map(city_counts, title)
-            elif map_type == "交互式地图":
-                fig = create_interactive_map(city_counts, title)
-            else:  # 极简地图
-                fig = create_minimal_map(city_counts, title)
+            fig.update_layout(
+                mapbox_style="carto-positron",  # 更快的轻量级地图
+                height=500,
+                margin=dict(l=0, r=0, t=30, b=0),
+                paper_bgcolor='white'
+            )
             
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("暂无全球城市坐标数据")
     else:
         st.info("请选择筛选条件来查看地图分布")
-
-# 地图说明
-with st.expander("💡 地图使用说明"):
-    st.markdown("""
-    **地图类型说明:**
-    - 🚀 **快速静态地图**: 加载最快，适合快速查看分布
-    - 🎯 **交互式地图**: 功能丰富，支持缩放和拖拽
-    - ⚡ **极简地图**: 平衡速度和功能，使用内置地图
-    
-    **如果地图加载缓慢，建议:**
-    1. 选择"快速静态地图"
-    2. 减少筛选条件
-    3. 刷新页面重新加载
-    """)
 
 # 前10菜系的多维度分析
 st.markdown('<h2 class="section-header">📈 前10菜系深度分析</h2>', unsafe_allow_html=True)
@@ -1032,7 +933,7 @@ st.sidebar.markdown(f"**价格等级**: {current_description}")
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #5d6d7e; padding: 2rem; font-size: 0.9rem;'>"
-    f"米其林餐厅全球分析 | 地图类型: {map_type} | 价格等级: {current_description}" +
+    f"米其林餐厅全球分析 | 大洲视图 | 价格等级: {current_description}" +
     "</div>",
     unsafe_allow_html=True
 )
