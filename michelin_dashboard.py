@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import re
+import colorsys
 
 # 设置页面
 st.set_page_config(
@@ -121,18 +122,45 @@ COLOR_SCHEME = {
     'hover': '#f2f4f4'
 }
 
-# 红色系颜色序列
-CHART_COLORS = [
-    '#7d1d1d',  # 极深红
-    '#a52a2a',  # 深红
-    '#c0392b',  # 中深红
-    '#e74c3c',  # 主红
-    '#ec7063',  # 亮红
-    '#f1948a',  # 浅红
-    '#f5b7b1',  # 更浅红
-    '#fadbd8',  # 浅粉红
-    '#fdedec',  # 极浅粉红
-]
+# 生成动态红色系颜色序列
+def generate_red_colors(n_colors):
+    """生成n个不同的红色系颜色"""
+    base_reds = [
+        '#7d1d1d',  # 极深红
+        '#a52a2a',  # 深红
+        '#c0392b',  # 中深红
+        '#e74c3c',  # 主红
+        '#ec7063',  # 亮红
+        '#f1948a',  # 浅红
+        '#f5b7b1',  # 更浅红
+        '#fadbd8',  # 浅粉红
+        '#fdedec',  # 极浅粉红
+    ]
+    
+    if n_colors <= len(base_reds):
+        return base_reds[:n_colors]
+    
+    # 如果需要更多颜色，动态生成
+    colors = []
+    # 基础红色色调范围 (0-15度在色轮上)
+    hues = np.linspace(0, 15, min(n_colors, 20))  # 限制最大20种色调变化
+    
+    for i in range(n_colors):
+        # 使用HSL颜色空间生成变化
+        hue = hues[i % len(hues)] / 360.0  # 色调 (红色区域)
+        saturation = 0.7 - (i * 0.6 / n_colors)  # 饱和度从0.7到0.1
+        lightness = 0.3 + (i * 0.5 / n_colors)   # 亮度从0.3到0.8
+        
+        # 转换为RGB
+        rgb = colorsys.hls_to_rgb(hue, lightness, saturation)
+        hex_color = '#{:02x}{:02x}{:02x}'.format(
+            int(rgb[0] * 255),
+            int(rgb[1] * 255), 
+            int(rgb[2] * 255)
+        )
+        colors.append(hex_color)
+    
+    return colors
 
 # 红色系连续色阶
 COLOR_SCALES = {
@@ -172,13 +200,6 @@ COLOR_SCALES = {
         [1.0, '#a52a2a']     # 深红
     ]
 }
-
-# 离散颜色方案 - 用于分类数据
-DISCRETE_COLORS = [
-    '#7d1d1d', '#a52a2a', '#c0392b', '#e74c3c', '#ec7063',
-    '#f1948a', '#f5b7b1', '#fadbd8', '#fdedec', '#fef5f5',
-    '#2c3e50', '#34495e', '#5d6d7e', '#85929e', '#aeb6bf'
-]
 
 # 标题
 st.markdown('<h1 class="main-header">🍽️ 米其林餐厅全球分析</h1>', unsafe_allow_html=True)
@@ -291,7 +312,7 @@ def get_unique_cuisines(df):
     unique_cuisines = sorted(list(set(all_cuisines)))
     return unique_cuisines
 
-# 获取前10菜系（基于餐厅计数，不是菜系出现次数）
+# 获取前N菜系（基于餐厅计数，不是菜系出现次数）
 @st.cache_data
 def get_top_cuisines_by_restaurants(df, top_n=10):
     """获取基于餐厅数量的前N大菜系"""
@@ -313,7 +334,6 @@ def get_top_cuisines_by_restaurants(df, top_n=10):
 
 # 获取数据
 unique_cuisines = get_unique_cuisines(df)
-top_10_cuisines = get_top_cuisines_by_restaurants(df, 10)
 
 # 侧边栏过滤器
 st.sidebar.header("🔍 数据筛选")
@@ -334,7 +354,7 @@ selected_city = st.sidebar.selectbox("选择城市", available_cities)
 selected_cuisines = st.sidebar.multiselect(
     "选择菜系（可多选）",
     options=unique_cuisines,
-    default=top_10_cuisines[:3] if top_10_cuisines else []
+    default=[]
 )
 
 # 米其林评级筛选
@@ -418,7 +438,7 @@ with col2:
     """, unsafe_allow_html=True)
 
 with col3:
-    selected_cuisines_count = len(selected_cuisines) if selected_cuisines else len(top_10_cuisines)
+    selected_cuisines_count = len(selected_cuisines) if selected_cuisines else 0
     st.markdown(f"""
     <div class="metric-card">
         <h3>选中菜系</h3>
@@ -439,7 +459,7 @@ with col4:
     </div>
     """, unsafe_allow_html=True)
 
-# 大洲地图展示 - 使用更快的地图样式
+# 大洲地图展示 - 修改为红色系
 st.markdown('<h2 class="section-header">🗺️ 大洲餐厅分布</h2>', unsafe_allow_html=True)
 
 if selected_continent != '全部':
@@ -461,7 +481,7 @@ if selected_continent != '全部':
         continent_cities = continent_cities.dropna(subset=['Lat', 'Lon'])
         
         if not continent_cities.empty:
-            # 创建大洲地图 - 使用更快的地图样式
+            # 创建大洲地图 - 使用红色系颜色方案
             fig = px.scatter_mapbox(
                 continent_cities,
                 lat='Lat',
@@ -471,14 +491,13 @@ if selected_continent != '全部':
                 hover_data={'Count': True},
                 size_max=25,
                 color='Count',
-                color_continuous_scale=COLOR_SCALES['reds'],
+                color_continuous_scale=COLOR_SCALES['reds'],  # 使用红色系颜色方案
                 zoom=3,
                 title=f"{selected_continent} 米其林餐厅分布 - 价格等级: {current_description}"
             )
             
-            # 使用更快的地图样式
             fig.update_layout(
-                mapbox_style="carto-positron",  # 更快的轻量级地图
+                mapbox_style="open-street-map",
                 height=500,
                 margin=dict(l=0, r=0, t=30, b=0),
                 paper_bgcolor='white'
@@ -508,7 +527,6 @@ else:
         city_counts = city_counts.dropna(subset=['Lat', 'Lon'])
         
         if not city_counts.empty:
-            # 使用更快的地图样式
             fig = px.scatter_mapbox(
                 city_counts,
                 lat='Lat',
@@ -518,13 +536,13 @@ else:
                 hover_data={'Count': True},
                 size_max=20,
                 color='Count',
-                color_continuous_scale=COLOR_SCALES['reds'],
+                color_continuous_scale=COLOR_SCALES['reds'],  # 使用红色系颜色方案
                 zoom=1,
                 title=f"全球米其林餐厅分布 - 价格等级: {current_description}"
             )
             
             fig.update_layout(
-                mapbox_style="carto-positron",  # 更快的轻量级地图
+                mapbox_style="open-street-map",
                 height=500,
                 margin=dict(l=0, r=0, t=30, b=0),
                 paper_bgcolor='white'
@@ -536,27 +554,47 @@ else:
     else:
         st.info("请选择筛选条件来查看地图分布")
 
-# 前10菜系的多维度分析
-st.markdown('<h2 class="section-header">📈 前10菜系深度分析</h2>', unsafe_allow_html=True)
+# 前N菜系的多维度分析
+st.markdown('<h2 class="section-header">📈 菜系深度分析</h2>', unsafe_allow_html=True)
 
-# 准备前10菜系数据 - 使用基于餐厅数量的统计
-df_top_10 = df[df['Cuisine_list'].apply(
-    lambda x: any(cuisine in x for cuisine in top_10_cuisines) if isinstance(x, list) else False
+# 添加菜系数量选择器
+col_config1, col_config2 = st.columns([1, 4])
+
+with col_config1:
+    # 菜系数量选择旋钮
+    top_n_cuisines = st.number_input(
+        "选择显示菜系数量",
+        min_value=5,
+        max_value=30,  # 增加到30个菜系
+        value=10,
+        step=1,
+        help="选择要显示的前N个菜系数量（最多30个）"
+    )
+
+# 获取前N菜系数据
+top_n_cuisines_list = get_top_cuisines_by_restaurants(df, top_n_cuisines)
+
+# 生成动态颜色序列
+dynamic_colors = generate_red_colors(len(top_n_cuisines_list))
+
+# 准备前N菜系数据
+df_top_n = df[df['Cuisine_list'].apply(
+    lambda x: any(cuisine in x for cuisine in top_n_cuisines_list) if isinstance(x, list) else False
 )]
 
-if not df_top_10.empty:
+if not df_top_n.empty:
     # 第一行：菜系分布和评级关系
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系餐厅数量</h3>', unsafe_allow_html=True)
+        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系餐厅数量</h3>', unsafe_allow_html=True)
         
         # 计算每个菜系的餐厅数量（基于餐厅计数，不是菜系出现次数）
         cuisine_restaurant_count = {}
         for idx, row in df.iterrows():
             if isinstance(row['Cuisine_list'], list):
                 for cuisine in row['Cuisine_list']:
-                    if cuisine in top_10_cuisines:
+                    if cuisine in top_n_cuisines_list:
                         if cuisine in cuisine_restaurant_count:
                             cuisine_restaurant_count[cuisine] += 1
                         else:
@@ -571,7 +609,7 @@ if not df_top_10.empty:
             x=cuisine_counts,
             y=cuisine_names,
             orientation='h',
-            labels={'x': '餐厅数量', 'y': ''},
+            labels={'x': '餐厅数量', 'y': '菜系'},
             color=cuisine_counts,
             color_continuous_scale=COLOR_SCALES['sequential']  # 使用红色系颜色方案
         )
@@ -580,13 +618,16 @@ if not df_top_10.empty:
             showlegend=False,
             height=400,
             margin=dict(l=0, r=0, t=0, b=0),
-            paper_bgcolor='white'
+            paper_bgcolor='white',
+            coloraxis_colorbar=dict(
+                title='餐厅数量'
+            )
         )
         
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系与评级分布</h3>', unsafe_allow_html=True)
+        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系与星级分布</h3>', unsafe_allow_html=True)
         
         # 创建菜系与评级的气泡图数据
         bubble_data = []
@@ -594,7 +635,7 @@ if not df_top_10.empty:
         # 定义评级顺序
         award_order = ['Bib Gourmand', '1 Star', '2 Stars', '3 Stars']
         
-        for cuisine in top_10_cuisines:
+        for cuisine in top_n_cuisines_list:
             for award in award_order:
                 # 计算该菜系在该评级下的餐厅数量
                 count = len(df[df['Cuisine_list'].apply(
@@ -612,7 +653,7 @@ if not df_top_10.empty:
         if bubble_data:
             bubble_df = pd.DataFrame(bubble_data)
             
-            # 创建气泡图
+            # 创建气泡图 - 使用动态颜色
             fig = px.scatter(
                 bubble_df,
                 x='Cuisine',
@@ -627,7 +668,7 @@ if not df_top_10.empty:
                     'Award': '米其林评级',
                     'Count': '餐厅数量'
                 },
-                color_discrete_sequence=DISCRETE_COLORS[:len(top_10_cuisines)]
+                color_discrete_sequence=dynamic_colors  # 使用动态生成的红色系颜色
             )
             
             # 自定义气泡大小范围，确保可视化效果
@@ -668,58 +709,74 @@ if not df_top_10.empty:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系平均价格等级</h3>', unsafe_allow_html=True)
-        
+        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系平均价格等级</h3>', unsafe_allow_html=True)
+    
         # 计算每个菜系的平均价格等级
         cuisine_price_data = []
-        for cuisine in top_10_cuisines:
+        for cuisine in top_n_cuisines_list:
             cuisine_restaurants = df[df['Cuisine_list'].apply(
                 lambda x: cuisine in x if isinstance(x, list) else False
             )]
             if len(cuisine_restaurants) > 0:
                 avg_price = cuisine_restaurants['Price_level'].mean()
                 cuisine_price_data.append({'Cuisine': cuisine, 'Avg_Price_Level': avg_price})
-        
+    
         if cuisine_price_data:
             cuisine_price_avg = pd.DataFrame(cuisine_price_data)
             cuisine_price_avg = cuisine_price_avg.sort_values('Avg_Price_Level', ascending=False)
-            
+        
             # 保留两位小数
             cuisine_price_avg['Avg_Price_Level'] = cuisine_price_avg['Avg_Price_Level'].round(2)
-            
+        
             fig = px.bar(
                 cuisine_price_avg,
                 x='Cuisine',
                 y='Avg_Price_Level',
-                labels={'x': '菜系', 'y': '平均价格等级'},
                 color='Avg_Price_Level',
                 color_continuous_scale=COLOR_SCALES['price_scale']
             )
-            
+        
+            # 更新图表布局，设置中文标签
             fig.update_layout(
                 height=400,
                 margin=dict(l=0, r=0, t=0, b=0),
                 xaxis_tickangle=-45,
                 showlegend=False,
-                paper_bgcolor='white'
+                paper_bgcolor='white',
+                # 设置x轴和y轴标签为中文
+                xaxis_title='菜系',
+                yaxis_title='平均价格等级',
+                # 设置颜色条标题为中文
+                coloraxis_colorbar=dict(
+                    title='平均价格等级'
+                )
             )
-            
+        
+            # 更新悬停信息为中文
+            fig.update_traces(
+                hovertemplate=(
+                    "<b>%{x}</b><br>" +
+                    "平均价格等级: %{y:.2f}<br>" +
+                    "<extra></extra>"
+                )
+            )
+        
             # 更新y轴格式显示两位小数
             fig.update_yaxes(tickformat=".2f")
-            
+        
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("暂无价格等级数据")
-    
+            
     with col2:
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系星级评分分布</h3>', unsafe_allow_html=True)
+        st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系星级评分分布</h3>', unsafe_allow_html=True)
         
         # 定义星级评分映射 - 排除Bib Gourmand
         award_mapping = {'1 Star': 1, '2 Stars': 2, '3 Stars': 3}
         
         # 计算每个菜系的平均星级评分和餐厅数量（只计算有星级的餐厅）
         cuisine_award_data = []
-        for cuisine in top_10_cuisines:
+        for cuisine in top_n_cuisines_list:
             cuisine_restaurants = df[df['Cuisine_list'].apply(
                 lambda x: cuisine in x if isinstance(x, list) else False
             )]
@@ -815,14 +872,14 @@ if not df_top_10.empty:
             st.info("暂无星级评分数据")
     
     # 第三行：综合关系气泡图
-    st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">菜系综合关系分析</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系综合关系分析</h3>', unsafe_allow_html=True)
     
     # 定义星级评分映射（用于综合关系分析）- 排除Bib Gourmand
     award_mapping = {'1 Star': 1, '2 Stars': 2, '3 Stars': 3}
     
     # 计算综合统计数据
     cuisine_stats_data = []
-    for cuisine in top_10_cuisines:
+    for cuisine in top_n_cuisines_list:
         cuisine_restaurants = df[df['Cuisine_list'].apply(
             lambda x: cuisine in x if isinstance(x, list) else False
         )]
@@ -865,7 +922,7 @@ if not df_top_10.empty:
                 'Avg_Award_Score': '平均星级评分',
                 'Restaurant_Count': '餐厅数量'
             },
-            color_discrete_sequence=DISCRETE_COLORS  # 使用红色系离散颜色序列
+            color_discrete_sequence=dynamic_colors  # 使用动态生成的红色系颜色
         )
         
         fig.update_layout(
@@ -884,7 +941,7 @@ if not df_top_10.empty:
         st.info("暂无综合统计数据")
 
 else:
-    st.info("暂无前10菜系数据")
+    st.info("暂无菜系数据")
 
 # 数据表格
 st.markdown('<h2 class="section-header">📋 餐厅详情</h2>', unsafe_allow_html=True)
