@@ -904,7 +904,6 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
                 "<b>%{x}</b><br>" +
                 "平均星级评分: %{y:.2f}<br>" +
                 "总餐厅数量: %{customdata[1]}<br>" +
-                "有星级餐厅: %{customdata[2]:.0f}<br>" +  # 使用 :.0f 格式确保显示为整数
                 "<extra></extra>"
             )
         )
@@ -1002,3 +1001,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
