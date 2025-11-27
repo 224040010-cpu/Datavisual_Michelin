@@ -788,18 +788,18 @@ if not cuisine_stats_df.empty:
         else:
             st.info("暂无菜系与评级数据")
     
-    # 第二行：价格分析和星级评分
-    col1, col2 = st.columns(2)
-    
+# 第二行：价格分析和星级评分
+col1, col2 = st.columns(2)
+
     with col1:
         st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系平均价格等级</h3>', unsafe_allow_html=True)
-    
-        # 使用统一统计数据
+
+    # 使用统一统计数据
         sorted_price_stats = cuisine_stats_df.sort_values('Avg_Price_Level', ascending=False)
-        
-        # 保留两位小数
+    
+    # 保留两位小数
         sorted_price_stats['Avg_Price_Level'] = sorted_price_stats['Avg_Price_Level'].round(2)
-        
+    
         fig = px.bar(
             sorted_price_stats,
             x='Cuisine',
@@ -807,7 +807,7 @@ if not cuisine_stats_df.empty:
             color='Avg_Price_Level',
             color_continuous_scale=COLOR_SCALES['price_scale']
         )
-        
+    
         # 更新图表布局，设置中文标签
         fig.update_layout(
             height=400,
@@ -823,7 +823,7 @@ if not cuisine_stats_df.empty:
                 title='平均价格等级'
             )
         )
-        
+    
         # 更新悬停信息为中文
         fig.update_traces(
             hovertemplate=(
@@ -832,12 +832,12 @@ if not cuisine_stats_df.empty:
                 "<extra></extra>"
             )
         )
-        
+    
         # 更新y轴格式显示两位小数
         fig.update_yaxes(tickformat=".2f")
-        
+    
         st.plotly_chart(fig, use_container_width=True)
-            
+        
     with col2:
         st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系星级评分分布</h3>', unsafe_allow_html=True)
         
@@ -847,7 +847,7 @@ if not cuisine_stats_df.empty:
         # 保留两位小数
         sorted_award_stats['Avg_Award_Score'] = sorted_award_stats['Avg_Award_Score'].round(2)
         sorted_award_stats['Starred_Percentage'] = sorted_award_stats['Starred_Percentage'].round(1)
-        
+    
         # 创建散点图 - 修复悬停信息问题
         fig = px.scatter(
             sorted_award_stats,
@@ -872,8 +872,8 @@ if not cuisine_stats_df.empty:
             },
             color_continuous_scale=COLOR_SCALES['sequential']
         )
-        
-        # 自定义气泡大小范围
+    
+    # 自定义气泡大小范围
         fig.update_traces(
             marker=dict(
                 sizemode='area',
@@ -883,7 +883,7 @@ if not cuisine_stats_df.empty:
                 line=dict(width=1, color='white')
             )
         )
-        
+    
         fig.update_layout(
             height=400,
             margin=dict(l=0, r=0, t=0, b=0),
@@ -893,7 +893,7 @@ if not cuisine_stats_df.empty:
             xaxis_title='菜系',
             yaxis_title='平均星级评分'
         )
-        
+    
         # 修复悬停信息显示 - 确保有星级餐厅数量显示为整数
         fig.update_traces(
             hovertemplate=(
@@ -904,10 +904,10 @@ if not cuisine_stats_df.empty:
                 "<extra></extra>"
             )
         )
-        
+    
         # 更新y轴格式显示两位小数
         fig.update_yaxes(tickformat=".2f")
-        
+    
         st.plotly_chart(fig, use_container_width=True)
     
     # 第三行：综合关系气泡图
@@ -1098,3 +1098,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
