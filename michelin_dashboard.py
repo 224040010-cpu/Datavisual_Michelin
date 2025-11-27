@@ -969,7 +969,106 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
 
 else:
     st.info("暂无菜系数据")
+# --- 【新增】设施与评级/价格分析 ---
+st.markdown('<h2 class="section-header">🏨 设施与评级/价格分析</h2>', unsafe_allow_html=True)
 
+if not filtered_df.empty:
+    # 准备用于分析的数据
+    facility_df = filtered_df.explode('Facilities_list')
+    
+    # 获取最常见的15个设施进行分析，避免图表过于拥挤
+    top_n_facilities = 15
+    if not facility_df.empty and 'Facilities_list' in facility_df.columns and facility_df['Facilities_list'].notna().any():
+        common_facilities = facility_df['Facilities_list'].value_counts().nlargest(top_n_facilities).index.tolist()
+        
+        # 1. 分组条形图
+        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">不同星级餐厅的设施分布 (热门设施)</h3>', unsafe_allow_html=True)
+        
+        analysis_df = facility_df[facility_df['Facilities_list'].isin(common_facilities)]
+        award_order = ['1 Star', '2 Stars', '3 Stars'] # 仅关注星级餐厅
+        analysis_df = analysis_df[analysis_df['Award'].isin(award_order)]
+
+        if not analysis_df.empty:
+            facility_award_counts = analysis_df.groupby(['Facilities_list', 'Award']).size().reset_index(name='Count')
+            
+            fig_bar = px.bar(
+                facility_award_counts,
+                x='Facilities_list',
+                y='Count',
+                color='Award',
+                barmode='group',
+                labels={'Facilities_list': '设施', 'Count': '餐厅数量', 'Award': '米其林评级'},
+                title='热门设施在不同星级餐厅中的数量',
+                category_orders={'Award': award_order, 'Facilities_list': common_facilities},
+                color_discrete_map={ # 适配为红色系
+                    '1 Star': '#f1948a',  # 浅红
+                    '2 Stars': '#e74c3c',  # 主红
+                    '3 Stars': '#a52a2a'   # 深红
+                }
+            )
+            fig_bar.update_layout(xaxis_tickangle=-45, paper_bgcolor='white', yaxis_title='餐厅数量', xaxis_title=None)
+            st.plotly_chart(fig_bar, use_container_width=True)
+        else:
+            st.info("根据当前筛选条件，没有足够的星级餐厅设施数据来生成分组条形图。")
+
+        # 2. 热力图
+        st.markdown('<h3 style="color: #34495e; margin-top: 2rem; margin-bottom: 1rem;">设施在不同评级/价格中的普及率</h3>', unsafe_allow_html=True)
+        heatmap_axis = st.radio(
+            "选择热力图分析维度", ('米其林星级', '价格等级'),
+            horizontal=True, key='heatmap_toggle'
+        )
+
+        # 确保 heatmap_df 中有有效的设施列表
+        heatmap_df = filtered_df.dropna(subset=['Facilities_list'])
+        heatmap_df = heatmap_df[heatmap_df['Facilities_list'].apply(lambda x: isinstance(x, list) and len(x) > 0 and any(fac in common_facilities for fac in x))]
+        
+        if not heatmap_df.empty:
+            if heatmap_axis == '米其林星级':
+                columns = ['1 Star', '2 Stars', '3 Stars']
+                heatmap_data = pd.DataFrame(index=common_facilities, columns=columns).fillna(0.0)
+
+                for award in columns:
+                    total_restaurants = len(heatmap_df[heatmap_df['Award'] == award])
+                    if total_restaurants > 0:
+                        for facility in common_facilities:
+                            count_with_facility = len(heatmap_df[(heatmap_df['Award'] == award) & (heatmap_df['Facilities_list'].apply(lambda x: facility in x))])
+                            heatmap_data.loc[facility, award] = (count_with_facility / total_restaurants) * 100
+                
+                title = '设施在不同星级餐厅中的普及率 (%)'
+                xaxis_title = '米其林评级'
+            
+            else: # 价格等级
+                columns = sorted(heatmap_df['Price_level'].dropna().unique().astype(int))
+                heatmap_data = pd.DataFrame(index=common_facilities, columns=columns).fillna(0.0)
+
+                for price_level in columns:
+                    total_restaurants = len(heatmap_df[heatmap_df['Price_level'] == price_level])
+                    if total_restaurants > 0:
+                        for facility in common_facilities:
+                            count_with_facility = len(heatmap_df[(heatmap_df['Price_level'] == price_level) & (heatmap_df['Facilities_list'].apply(lambda x: facility in x))])
+                            heatmap_data.loc[facility, price_level] = (count_with_facility / total_restaurants) * 100
+                
+                title = '设施在不同价格等级餐厅中的普及率 (%)'
+                xaxis_title = '价格等级'
+
+            fig_heatmap = px.imshow(
+                heatmap_data,
+                text_auto=".0f",
+                aspect="auto",
+                labels=dict(x=xaxis_title, y="设施", color="普及率 (%)"),
+                title=title,
+                color_continuous_scale=COLOR_SCALES['sequential'] # 使用红色系
+            )
+            fig_heatmap.update_layout(paper_bgcolor='white', yaxis={'tickmode': 'array', 'tickvals': common_facilities, 'autorange': 'reversed'})
+            fig_heatmap.update_traces(hovertemplate='设施: %{y}<br>' + xaxis_title + ': %{x}<br>普及率: %{z:.1f}%<extra></extra>')
+            st.plotly_chart(fig_heatmap, use_container_width=True)
+        else:
+            st.info("根据当前筛选条件，没有足够的设施数据来生成热力图。")
+    else:
+        st.info("当前筛选条件下，餐厅不包含可分析的设施信息。")
+else:
+    st.info("请调整筛选条件以查看设施分析。")
+    
 # 数据表格
 st.markdown('<h2 class="section-header">📋 餐厅详情</h2>', unsafe_allow_html=True)
 
@@ -1021,4 +1120,5 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
