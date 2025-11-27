@@ -87,24 +87,18 @@ st.markdown("""
         font-weight: 500;
         color: #2c3e50;
     }
-    /* 自定义radio样式 */
-    .stRadio > div {
-        flex-direction: column;
-    }
-    .stRadio > div > label {
-        margin-bottom: 5px;
+    /* 自定义checkbox样式 */
+    .stCheckbox > div {
         padding: 8px 12px;
         border-radius: 8px;
         border: 1px solid #e0e6ea;
         background: white;
         transition: all 0.3s ease;
+        margin-bottom: 5px;
     }
-    .stRadio > div > label:hover {
+    .stCheckbox > div:hover {
         background: #f8f9fa;
         border-color: #e74c3c;
-    }
-    .stRadio > div > label[data-testid="stRadioLabel"] > div:first-child {
-        background: white;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -240,7 +234,7 @@ def load_data():
         df['Country'] = df['Location'].str.split(',').str[-1].str.strip()
         df['City'] = df['Location'].str.split(',').str[0].str.strip()
         
-        # 国家名称标准化
+        # 国家及地区名称标准化
         country_mapping = {
             'USA': 'United States',
             'UK': 'United Kingdom', 
@@ -369,11 +363,10 @@ def get_filtered_top_cuisines_by_restaurants(filtered_df, top_n=10):
     
     return top_cuisines
 
-# 【统一】计算菜系与星级分布数据
+# 【统一】计算菜系与星级分布数据（基于选中的评级）
 @st.cache_data
-def calculate_cuisine_award_distribution(filtered_df, top_cuisines_list):
-    """统一计算菜系与星级分布数据（按照第一张图的计数逻辑）"""
-    award_order = ['Bib Gourmand', '1 Star', '2 Stars', '3 Stars']
+def calculate_cuisine_award_distribution(filtered_df, top_cuisines_list, selected_awards):
+    """统一计算菜系与星级分布数据（基于选中的评级）"""
     distribution_data = []
     
     for cuisine in top_cuisines_list:
@@ -382,41 +375,47 @@ def calculate_cuisine_award_distribution(filtered_df, top_cuisines_list):
             lambda x: cuisine in x if isinstance(x, list) else False
         )]
         
-        # 计算每个星级的餐厅数量
-        for award in award_order:
+        # 计算每个选中星级的餐厅数量
+        for award in selected_awards:
             count = len(cuisine_restaurants[cuisine_restaurants['Award'] == award])
             
             if count > 0:
                 distribution_data.append({
                     'Cuisine': cuisine,
                     'Award': award,
-                    'Count': count,
-                    'Award_Order': award_order.index(award)
+                    'Count': count
                 })
     
     return pd.DataFrame(distribution_data)
 
-# 【统一】计算菜系统计数据（基于相同的计数逻辑）
+# 【统一】计算菜系统计数据（基于相同的计数逻辑和选中的评级）
 @st.cache_data
-def calculate_cuisine_stats_from_distribution(distribution_df, top_cuisines_list):
+def calculate_cuisine_stats_from_distribution(distribution_df, filtered_df, top_cuisines_list, selected_awards):
     """基于统一的分布数据计算菜系统计数据"""
     stats_data = []
     award_mapping = {'1 Star': 1, '2 Stars': 2, '3 Stars': 3}
+    
+    # 获取选中的星级评级（用于计算平均星级评分）
+    selected_star_awards = [award for award in selected_awards if award in ['1 Star', '2 Stars', '3 Stars']]
     
     for cuisine in top_cuisines_list:
         # 从分布数据中获取该菜系的所有记录
         cuisine_data = distribution_df[distribution_df['Cuisine'] == cuisine]
         
+        # 筛选包含该菜系的所有餐厅（用于计算价格等级）
+        cuisine_restaurants = filtered_df[filtered_df['Cuisine_list'].apply(
+            lambda x: cuisine in x if isinstance(x, list) else False
+        )]
+        
         if not cuisine_data.empty:
-            # 计算总餐厅数量（所有评级）
+            # 计算总餐厅数量（选中的评级）
             total_restaurants = cuisine_data['Count'].sum()
             
-            # 计算有星级餐厅数量和平均星级评分（排除Bib Gourmand）
-            starred_data = cuisine_data[cuisine_data['Award'].isin(['1 Star', '2 Stars', '3 Stars'])]
+            # 计算有星级餐厅数量和平均星级评分（基于选中的星级评级）
+            starred_data = cuisine_data[cuisine_data['Award'].isin(selected_star_awards)]
             starred_count = starred_data['Count'].sum()
-            starred_percentage = (starred_count / total_restaurants * 100) if total_restaurants > 0 else 0
             
-            # 计算平均星级评分（只基于有星级的餐厅）
+            # 计算平均星级评分（只基于选中的有星级的餐厅）
             if starred_count > 0:
                 total_score = 0
                 for _, row in starred_data.iterrows():
@@ -425,10 +424,7 @@ def calculate_cuisine_stats_from_distribution(distribution_df, top_cuisines_list
             else:
                 avg_award_score = 0
             
-            # 获取平均价格等级（需要从原始数据计算）
-            cuisine_restaurants = filtered_df[filtered_df['Cuisine_list'].apply(
-                lambda x: cuisine in x if isinstance(x, list) else False
-            )]
+            # 计算平均价格等级（基于所有选中评级的餐厅）
             avg_price_level = cuisine_restaurants['Price_level'].mean() if len(cuisine_restaurants) > 0 else 0
             
             stats_data.append({
@@ -436,7 +432,6 @@ def calculate_cuisine_stats_from_distribution(distribution_df, top_cuisines_list
                 'Restaurant_Count': total_restaurants,
                 'Avg_Price_Level': avg_price_level,
                 'Starred_Count': starred_count,
-                'Starred_Percentage': starred_percentage,
                 'Avg_Award_Score': avg_award_score
             })
     
@@ -468,9 +463,15 @@ selected_cuisines = st.sidebar.multiselect(
     default=[]
 )
 
-# 米其林评级筛选
-awards = ['全部'] + sorted(df['Award'].dropna().unique().tolist())
-selected_award = st.sidebar.selectbox("米其林评级", awards)
+# 【修改】米其林评级筛选 - 改为多选
+st.sidebar.markdown("### 🏆 米其林评级")
+all_awards = ['1 Star', '2 Stars', '3 Stars', 'Bib Gourmand']
+selected_awards = st.sidebar.multiselect(
+    "选择评级（可多选）",
+    options=all_awards,
+    default=all_awards,  # 默认全选
+    help="选择要包含的米其林评级类型"
+)
 
 # 【新增】设施筛选
 st.sidebar.markdown("---")
@@ -480,7 +481,6 @@ selected_facilities = st.sidebar.multiselect(
     default=[],
     help="筛选包含所有选定设施的餐厅"
 )
-
 
 # 价格等级选择器 - 修改为使用radio组件，避免双击问题
 st.sidebar.markdown("---")
@@ -527,8 +527,8 @@ if selected_continent != '全部':
     filtered_df = filtered_df[filtered_df['Continent'] == selected_continent]
 if selected_city != '全部':
     filtered_df = filtered_df[filtered_df['City'] == selected_city]
-if selected_award != '全部':
-    filtered_df = filtered_df[filtered_df['Award'] == selected_award]
+if selected_awards:  # 只应用选中的评级筛选
+    filtered_df = filtered_df[filtered_df['Award'].isin(selected_awards)]
 if selected_cuisines:
     filtered_df = filtered_df[filtered_df['Cuisine_list'].apply(
         lambda x: any(cuisine in x for cuisine in selected_cuisines) if isinstance(x, list) else False
@@ -573,15 +573,12 @@ with col3:
     """, unsafe_allow_html=True)
 
 with col4:
-    # 替换为更有意义的指标：有星级餐厅占比
-    total_restaurants = len(filtered_df)
-    starred_restaurants = len(filtered_df[filtered_df['Award'].isin(['1 Star', '2 Stars', '3 Stars'])])
-    starred_percentage = (starred_restaurants / total_restaurants * 100) if total_restaurants > 0 else 0
-    
+    # 显示选中的评级数量
+    selected_awards_count = len(selected_awards)
     st.markdown(f"""
     <div class="metric-card">
-        <h3>有星级餐厅占比</h3>
-        <h2>{starred_percentage:.1f}%</h2>
+        <h3>选中评级</h3>
+        <h2>{selected_awards_count}</h2>
     </div>
     """, unsafe_allow_html=True)
 
@@ -619,7 +616,7 @@ if selected_continent != '全部':
                 color='Count',
                 color_continuous_scale=COLOR_SCALES['reds'],  # 使用红色系颜色方案
                 zoom=3,
-                title=f"{selected_continent} 米其林餐厅分布 - 价格等级: {current_description}"
+                title=f"{selected_continent} 米其林餐厅分布 - 选中评级: {', '.join(selected_awards)}"
             )
             
             fig.update_layout(
@@ -664,7 +661,7 @@ else:
                 color='Count',
                 color_continuous_scale=COLOR_SCALES['reds'],  # 使用红色系颜色方案
                 zoom=1,
-                title=f"全球米其林餐厅分布 - 价格等级: {current_description}"
+                title=f"全球米其林餐厅分布 - 选中评级: {', '.join(selected_awards)}"
             )
             
             fig.update_layout(
@@ -703,9 +700,9 @@ top_n_cuisines_list = get_filtered_top_cuisines_by_restaurants(filtered_df, top_
 # 生成动态颜色序列
 dynamic_colors = generate_red_colors(len(top_n_cuisines_list))
 
-# 【统一】使用相同的计数逻辑计算数据
-distribution_df = calculate_cuisine_award_distribution(filtered_df, top_n_cuisines_list)
-cuisine_stats_df = calculate_cuisine_stats_from_distribution(distribution_df, top_n_cuisines_list)
+# 【统一】使用相同的计数逻辑计算数据（基于选中的评级）
+distribution_df = calculate_cuisine_award_distribution(filtered_df, top_n_cuisines_list, selected_awards)
+cuisine_stats_df = calculate_cuisine_stats_from_distribution(distribution_df, filtered_df, top_n_cuisines_list, selected_awards)
 
 if not distribution_df.empty and not cuisine_stats_df.empty:
     # 第一行：菜系分布和评级关系
@@ -776,8 +773,7 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
             showlegend=False,
             paper_bgcolor='white',
             xaxis_title='菜系',
-            yaxis_title='米其林评级',
-            yaxis={'categoryorder': 'array', 'categoryarray': ['Bib Gourmand', '1 Star', '2 Stars', '3 Stars']}
+            yaxis_title='米其林评级'
         )
         
         # 改进悬停信息显示
@@ -850,7 +846,6 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
         
         # 保留两位小数
         sorted_award_stats['Avg_Award_Score'] = sorted_award_stats['Avg_Award_Score'].round(2)
-        sorted_award_stats['Starred_Percentage'] = sorted_award_stats['Starred_Percentage'].round(1)
         
         # 创建散点图 - 修复悬停信息问题
         fig = px.scatter(
@@ -863,16 +858,14 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
                 'Cuisine': False,  # 不在悬停数据中重复显示
                 'Avg_Award_Score': ':.2f',
                 'Restaurant_Count': True,
-                'Starred_Count': True,
-                'Starred_Percentage': ':.1f'
+                'Starred_Count': True
             },
             size_max=40,
             labels={
                 'Cuisine': '菜系',
                 'Avg_Award_Score': '平均星级评分',
                 'Restaurant_Count': '总餐厅数量',
-                'Starred_Count': '有星级餐厅数量',
-                'Starred_Percentage': '有星级餐厅占比(%)'
+                'Starred_Count': '有星级餐厅数量'
             },
             color_continuous_scale=COLOR_SCALES['sequential']
         )
@@ -903,7 +896,8 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
             hovertemplate=(
                 "<b>%{x}</b><br>" +
                 "平均星级评分: %{y:.2f}<br>" +
-                "总餐厅数量: %{customdata[1]}<br>" +
+                "总餐厅数量: %{marker.size}<br>" +
+                "有星级餐厅: %{customdata[2]:.0f}<br>" +  # 使用 :.0f 格式确保显示为整数
                 "<extra></extra>"
             )
         )
@@ -912,7 +906,7 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
         fig.update_yaxes(tickformat=".2f")
         
         st.plotly_chart(fig, use_container_width=True)
-        
+    
     # 第三行：综合关系气泡图
     st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系综合关系分析</h3>', unsafe_allow_html=True)
     
@@ -955,6 +949,7 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
             "平均价格等级: %{x:.2f}<br>" +
             "平均星级评分: %{y:.2f}<br>" +
             "餐厅数量: %{marker.size}<br>" +
+            "有星级餐厅: %{customdata[3]:.0f}<br>" +
             "<extra></extra>"
         )
     )
@@ -973,6 +968,10 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
     fig.update_yaxes(tickformat=".2f")
     
     st.plotly_chart(fig, use_container_width=True)
+
+else:
+    st.info("暂无菜系数据")
+
 # 数据表格
 st.markdown('<h2 class="section-header">📋 餐厅详情</h2>', unsafe_allow_html=True)
 
@@ -1013,18 +1012,14 @@ if selected_continent != '全部':
     st.sidebar.markdown(f"**大洲**: {selected_continent}")
 if selected_city != '全部':
     st.sidebar.markdown(f"**城市**: {selected_city}")
-if selected_award != '全部':
-    st.sidebar.markdown(f"**评级**: {selected_award}")
+st.sidebar.markdown(f"**选中评级**: {', '.join(selected_awards)}")
 st.sidebar.markdown(f"**价格等级**: {current_description}")
 
 # 页脚
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #5d6d7e; padding: 2rem; font-size: 0.9rem;'>"
-    f"米其林餐厅全球分析 | 大洲视图 | 价格等级: {current_description}" +
+    f"米其林餐厅全球分析 | 选中评级: {', '.join(selected_awards)} | 价格等级: {current_description}" +
     "</div>",
     unsafe_allow_html=True
 )
-
-
-
