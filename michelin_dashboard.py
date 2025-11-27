@@ -63,29 +63,29 @@ st.markdown("""
         font-weight: 300;
         color: #2c3e50;
     }
-    .price-level-btn {
-        width: 100%;
-        margin: 2px 0;
-        border-radius: 8px;
-        border: 1px solid #ccd1d1;
-        background: white;
-        transition: all 0.3s ease;
-        padding: 0.5rem;
-    }
-    .price-level-btn:hover {
-        background: #f2f4f4;
-        border-color: #e74c3c;
-    }
-    .price-level-btn.active {
-        background: #e74c3c;
-        color: white;
-        border-color: #e74c3c;
-    }
     .price-level-label {
         text-align: center;
         margin-top: 10px;
         font-weight: 500;
         color: #2c3e50;
+    }
+    /* 自定义multiselect样式 */
+    .stMultiSelect > div > div {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #e0e6ea;
+        background: white;
+        transition: all 0.3s ease;
+    }
+    .stMultiSelect > div > div:hover {
+        background: #f8f9fa;
+        border-color: #e74c3c;
+    }
+    .stMultiSelect [data-baseweb="tag"] {
+        background-color: #e74c3c;
+        color: white;
+        border-radius: 6px;
+        margin: 2px;
     }
     /* 自定义checkbox样式 */
     .stCheckbox > div {
@@ -482,44 +482,48 @@ selected_facilities = st.sidebar.multiselect(
     help="筛选包含所有选定设施的餐厅"
 )
 
-# 价格等级选择器 - 修改为使用radio组件，避免双击问题
+# 价格等级选择器 - 修改为多选形式
 st.sidebar.markdown("---")
 st.sidebar.subheader("💰 价格等级")
 
 # 价格等级描述
 price_level_descriptions = {
-    '全部': "所有价格等级",
-    1: "经济型",
-    2: "中价位", 
-    3: "高消费",
-    4: "奢华型"
+    1: "💰 经济型 (¥)",
+    2: "💰💰 中价位 (¥¥)", 
+    3: "💰💰💰 高消费 (¥¥¥)",
+    4: "💰💰💰💰 奢华型 (¥¥¥¥)"
 }
 
 # 初始化session state
-if 'selected_price_level' not in st.session_state:
-    st.session_state.selected_price_level = '全部'
+if 'selected_price_levels' not in st.session_state:
+    st.session_state.selected_price_levels = [1, 2, 3, 4]  # 默认全选
 
-# 使用radio组件替代按钮
-price_options = ['全部', 1, 2, 3, 4]
-price_labels = [f"{option} - {price_level_descriptions[option]}" for option in price_options]
+# 使用多选组件
+price_options = [1, 2, 3, 4]
 
-# 创建radio选择器
-selected_price_label = st.sidebar.radio(
-    "选择价格等级:",
-    options=price_labels,
-    index=price_options.index(st.session_state.selected_price_level),
-    key="price_level_radio"
+# 创建多选选择器
+selected_price_levels = st.sidebar.multiselect(
+    "选择价格等级（可多选）:",
+    options=price_options,
+    default=st.session_state.selected_price_levels,  # 默认全选
+    format_func=lambda x: price_level_descriptions[x],
+    help="选择要包含的价格等级"
 )
 
-# 从选择的标签中提取价格等级
-selected_price_level = price_options[price_labels.index(selected_price_label)]
-
 # 更新session state
-st.session_state.selected_price_level = selected_price_level
+st.session_state.selected_price_levels = selected_price_levels
 
 # 显示当前选择的价格等级
-current_description = price_level_descriptions.get(st.session_state.selected_price_level, "未知等级")
-st.sidebar.markdown(f'<div class="price-level-label" style="color: #e74c3c; font-weight: bold;">当前选择: {current_description}</div>', unsafe_allow_html=True)
+if selected_price_levels:
+    selected_descriptions = [price_level_descriptions[level] for level in sorted(selected_price_levels)]
+    current_description = f"选中 {len(selected_price_levels)} 个等级"
+    st.sidebar.markdown(f'<div class="price-level-label" style="color: #e74c3c; font-weight: bold;">当前选择: {current_description}</div>', unsafe_allow_html=True)
+    
+    # 显示具体选中的等级
+    for desc in selected_descriptions:
+        st.sidebar.markdown(f'<div style="font-size: 0.8rem; color: #5d6d7e; margin: 2px 0;">• {desc}</div>', unsafe_allow_html=True)
+else:
+    st.sidebar.markdown(f'<div class="price-level-label" style="color: #e74c3c; font-weight: bold;">当前选择: 未选择任何价格等级</div>', unsafe_allow_html=True)
 
 # 应用筛选
 filtered_df = df.copy()
@@ -538,8 +542,9 @@ if selected_cuisines:
 if selected_facilities:
     filtered_df = filtered_df[filtered_df['Facilities_list'].apply(lambda x: all(facility in x for facility in selected_facilities) if isinstance(x, list) else False)]
 
-if st.session_state.selected_price_level != '全部':
-    filtered_df = filtered_df[filtered_df['Price_level'] == st.session_state.selected_price_level]
+# 【修改】应用价格等级筛选 - 多选逻辑
+if selected_price_levels:  # 只有当选择了价格等级时才应用筛选
+    filtered_df = filtered_df[filtered_df['Price_level'].isin(selected_price_levels)]
 
 # 关键指标卡片
 st.markdown('<h2 class="section-header">📊 核心指标</h2>', unsafe_allow_html=True)
@@ -605,6 +610,7 @@ if selected_continent != '全部':
         
         if not continent_cities.empty:
             # 创建大洲地图 - 使用红色系颜色方案
+            price_desc = f"价格等级: {', '.join(map(str, sorted(selected_price_levels)))}" if selected_price_levels else "所有价格等级"
             fig = px.scatter_mapbox(
                 continent_cities,
                 lat='Lat',
@@ -616,7 +622,7 @@ if selected_continent != '全部':
                 color='Count',
                 color_continuous_scale=COLOR_SCALES['reds'],  # 使用红色系颜色方案
                 zoom=3,
-                title=f"{selected_continent} 米其林餐厅分布 - 选中评级: {', '.join(selected_awards)}"
+                title=f"{selected_continent} 米其林餐厅分布 - 选中评级: {', '.join(selected_awards)} - {price_desc}"
             )
             
             fig.update_layout(
@@ -650,6 +656,7 @@ else:
         city_counts = city_counts.dropna(subset=['Lat', 'Lon'])
         
         if not city_counts.empty:
+            price_desc = f"价格等级: {', '.join(map(str, sorted(selected_price_levels)))}" if selected_price_levels else "所有价格等级"
             fig = px.scatter_mapbox(
                 city_counts,
                 lat='Lat',
@@ -661,7 +668,7 @@ else:
                 color='Count',
                 color_continuous_scale=COLOR_SCALES['reds'],  # 使用红色系颜色方案
                 zoom=1,
-                title=f"全球米其林餐厅分布 - 选中评级: {', '.join(selected_awards)}"
+                title=f"全球米其林餐厅分布 - 选中评级: {', '.join(selected_awards)} - {price_desc}"
             )
             
             fig.update_layout(
@@ -969,6 +976,7 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
 
 else:
     st.info("暂无菜系数据")
+
 # --- 【新增】设施与评级/价格分析 ---
 st.markdown('<h2 class="section-header">🏨 设施与评级/价格分析</h2>', unsafe_allow_html=True)
 
@@ -1110,15 +1118,18 @@ if selected_continent != '全部':
 if selected_city != '全部':
     st.sidebar.markdown(f"**城市**: {selected_city}")
 st.sidebar.markdown(f"**选中评级**: {', '.join(selected_awards)}")
-st.sidebar.markdown(f"**价格等级**: {current_description}")
+if selected_price_levels:
+    price_levels_str = ', '.join([price_level_descriptions[level] for level in sorted(selected_price_levels)])
+    st.sidebar.markdown(f"**价格等级**: {len(selected_price_levels)} 个等级")
+else:
+    st.sidebar.markdown(f"**价格等级**: 所有等级")
 
 # 页脚
 st.markdown("---")
+price_footer = f"价格等级: {', '.join(map(str, sorted(selected_price_levels)))}" if selected_price_levels else "所有价格等级"
 st.markdown(
     "<div style='text-align: center; color: #5d6d7e; padding: 2rem; font-size: 0.9rem;'>"
-    f"米其林餐厅全球分析 | 选中评级: {', '.join(selected_awards)} | 价格等级: {current_description}" +
+    f"米其林餐厅全球分析 | 选中评级: {', '.join(selected_awards)} | {price_footer}" +
     "</div>",
     unsafe_allow_html=True
 )
-
-
