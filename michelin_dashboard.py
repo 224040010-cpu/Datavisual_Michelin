@@ -912,7 +912,7 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
         fig.update_yaxes(tickformat=".2f")
         
         st.plotly_chart(fig, use_container_width=True)
-    
+        
     # 第三行：综合关系气泡图
     st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系综合关系分析</h3>', unsafe_allow_html=True)
     
@@ -924,20 +924,49 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
         size='Restaurant_Count',
         color='Cuisine',
         hover_name='Cuisine',
+        hover_data={
+            'Cuisine': False,
+            'Avg_Price_Level': ':.2f',
+            'Avg_Award_Score': ':.2f', 
+            'Restaurant_Count': True,
+            'Starred_Count': True
+        },
         size_max=40,
         labels={
             'Avg_Price_Level': '平均价格等级',
             'Avg_Award_Score': '平均星级评分',
-            'Restaurant_Count': '餐厅数量'
+            'Restaurant_Count': '餐厅数量',
+            'Starred_Count': '有星级餐厅数量'
         },
         color_discrete_sequence=dynamic_colors  # 使用动态生成的红色系颜色
+    )
+    
+    # 自定义气泡大小范围
+    fig.update_traces(
+        marker=dict(
+            sizemode='area',
+            sizeref=2.*max(cuisine_stats_df['Restaurant_Count'])/(40.**2),
+            sizemin=8,
+            opacity=0.7,
+            line=dict(width=1, color='white')
+        ),
+        hovertemplate=(
+            "<b>%{hovertext}</b><br>" +
+            "平均价格等级: %{x:.2f}<br>" +
+            "平均星级评分: %{y:.2f}<br>" +
+            "餐厅数量: %{marker.size}<br>" +
+            "有星级餐厅: %{customdata[3]:.0f}<br>" +
+            "<extra></extra>"
+        )
     )
     
     fig.update_layout(
         height=500,
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=True,
-        paper_bgcolor='white'
+        paper_bgcolor='white',
+        xaxis_title='平均价格等级',
+        yaxis_title='平均星级评分'
     )
     
     # 更新坐标轴格式显示两位小数
@@ -945,10 +974,6 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
     fig.update_yaxes(tickformat=".2f")
     
     st.plotly_chart(fig, use_container_width=True)
-
-else:
-    st.info("暂无菜系数据")
-
 # 数据表格
 st.markdown('<h2 class="section-header">📋 餐厅详情</h2>', unsafe_allow_html=True)
 
@@ -1001,4 +1026,5 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
