@@ -369,39 +369,71 @@ def get_filtered_top_cuisines_by_restaurants(filtered_df, top_n=10):
     
     return top_cuisines
 
-# 【新增】计算菜系统计数据（统一函数）
+# 【统一】计算菜系与星级分布数据
 @st.cache_data
-def calculate_cuisine_stats(filtered_df, top_cuisines_list):
-    """计算菜系统计数据，确保逻辑一致性"""
-    stats_data = []
+def calculate_cuisine_award_distribution(filtered_df, top_cuisines_list):
+    """统一计算菜系与星级分布数据（按照第一张图的计数逻辑）"""
+    award_order = ['Bib Gourmand', '1 Star', '2 Stars', '3 Stars']
+    distribution_data = []
     
     for cuisine in top_cuisines_list:
-        # 筛选包含该菜系的餐厅
+        # 筛选包含该菜系的所有餐厅
         cuisine_restaurants = filtered_df[filtered_df['Cuisine_list'].apply(
             lambda x: cuisine in x if isinstance(x, list) else False
         )]
         
-        if len(cuisine_restaurants) > 0:
-            # 基本统计
-            restaurant_count = len(cuisine_restaurants)
-            avg_price_level = cuisine_restaurants['Price_level'].mean()
+        # 计算每个星级的餐厅数量
+        for award in award_order:
+            count = len(cuisine_restaurants[cuisine_restaurants['Award'] == award])
             
-            # 星级统计（只计算有星级的餐厅）
-            starred_restaurants = cuisine_restaurants[cuisine_restaurants['Award'].isin(['1 Star', '2 Stars', '3 Stars'])]
-            starred_count = len(starred_restaurants)
-            starred_percentage = (starred_count / restaurant_count * 100) if restaurant_count > 0 else 0
+            if count > 0:
+                distribution_data.append({
+                    'Cuisine': cuisine,
+                    'Award': award,
+                    'Count': count,
+                    'Award_Order': award_order.index(award)
+                })
+    
+    return pd.DataFrame(distribution_data)
+
+# 【统一】计算菜系统计数据（基于相同的计数逻辑）
+@st.cache_data
+def calculate_cuisine_stats_from_distribution(distribution_df, top_cuisines_list):
+    """基于统一的分布数据计算菜系统计数据"""
+    stats_data = []
+    award_mapping = {'1 Star': 1, '2 Stars': 2, '3 Stars': 3}
+    
+    for cuisine in top_cuisines_list:
+        # 从分布数据中获取该菜系的所有记录
+        cuisine_data = distribution_df[distribution_df['Cuisine'] == cuisine]
+        
+        if not cuisine_data.empty:
+            # 计算总餐厅数量（所有评级）
+            total_restaurants = cuisine_data['Count'].sum()
             
-            # 平均星级评分（只计算有星级的餐厅）
-            award_mapping = {'1 Star': 1, '2 Stars': 2, '3 Stars': 3}
-            if len(starred_restaurants) > 0:
-                starred_restaurants['Award_Score'] = starred_restaurants['Award'].map(award_mapping)
-                avg_award_score = starred_restaurants['Award_Score'].mean()
+            # 计算有星级餐厅数量和平均星级评分（排除Bib Gourmand）
+            starred_data = cuisine_data[cuisine_data['Award'].isin(['1 Star', '2 Stars', '3 Stars'])]
+            starred_count = starred_data['Count'].sum()
+            starred_percentage = (starred_count / total_restaurants * 100) if total_restaurants > 0 else 0
+            
+            # 计算平均星级评分（只基于有星级的餐厅）
+            if starred_count > 0:
+                total_score = 0
+                for _, row in starred_data.iterrows():
+                    total_score += row['Count'] * award_mapping[row['Award']]
+                avg_award_score = total_score / starred_count
             else:
                 avg_award_score = 0
             
+            # 获取平均价格等级（需要从原始数据计算）
+            cuisine_restaurants = filtered_df[filtered_df['Cuisine_list'].apply(
+                lambda x: cuisine in x if isinstance(x, list) else False
+            )]
+            avg_price_level = cuisine_restaurants['Price_level'].mean() if len(cuisine_restaurants) > 0 else 0
+            
             stats_data.append({
                 'Cuisine': cuisine,
-                'Restaurant_Count': restaurant_count,
+                'Restaurant_Count': total_restaurants,
                 'Avg_Price_Level': avg_price_level,
                 'Starred_Count': starred_count,
                 'Starred_Percentage': starred_percentage,
@@ -665,16 +697,17 @@ with col_config1:
         help="选择要显示的前N个菜系数量（最多30个）"
     )
 
-# 【修复】获取筛选后的前N菜系数据，确保数据一致性
+# 【统一】获取筛选后的前N菜系数据
 top_n_cuisines_list = get_filtered_top_cuisines_by_restaurants(filtered_df, top_n_cuisines)
 
 # 生成动态颜色序列
 dynamic_colors = generate_red_colors(len(top_n_cuisines_list))
 
-# 【修复】使用统一函数计算菜系统计数据
-cuisine_stats_df = calculate_cuisine_stats(filtered_df, top_n_cuisines_list)
+# 【统一】使用相同的计数逻辑计算数据
+distribution_df = calculate_cuisine_award_distribution(filtered_df, top_n_cuisines_list)
+cuisine_stats_df = calculate_cuisine_stats_from_distribution(distribution_df, top_n_cuisines_list)
 
-if not cuisine_stats_df.empty:
+if not distribution_df.empty and not cuisine_stats_df.empty:
     # 第一行：菜系分布和评级关系
     col1, col2 = st.columns(2)
     
@@ -709,97 +742,68 @@ if not cuisine_stats_df.empty:
     with col2:
         st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系与星级分布</h3>', unsafe_allow_html=True)
         
-        # 创建菜系与评级的气泡图数据
-        bubble_data = []
+        # 创建气泡图 - 使用统一的分布数据
+        fig = px.scatter(
+            distribution_df,
+            x='Cuisine',
+            y='Award',
+            size='Count',
+            color='Cuisine',
+            hover_name='Cuisine',
+            hover_data={'Count': True, 'Cuisine': False, 'Award': True},
+            size_max=30,
+            labels={
+                'Cuisine': '菜系',
+                'Award': '米其林评级',
+                'Count': '餐厅数量'
+            },
+            color_discrete_sequence=dynamic_colors  # 使用动态生成的红色系颜色
+        )
         
-        # 定义评级顺序
-        award_order = ['Bib Gourmand', '1 Star', '2 Stars', '3 Stars']
+        # 自定义气泡大小范围，确保可视化效果
+        fig.update_traces(
+            marker=dict(
+                sizemode='area',
+                sizeref=2.*max(distribution_df['Count'])/(30.**2),
+                sizemin=4
+            )
+        )
         
-        for cuisine in top_n_cuisines_list:
-            # 筛选该菜系的餐厅
-            cuisine_restaurants = filtered_df[filtered_df['Cuisine_list'].apply(
-                lambda x: cuisine in x if isinstance(x, list) else False
-            )]
-            
-            for award in award_order:
-                # 计算该菜系在该评级下的餐厅数量
-                count = len(cuisine_restaurants[cuisine_restaurants['Award'] == award])
-                
-                if count > 0:
-                    bubble_data.append({
-                        'Cuisine': cuisine,
-                        'Award': award,
-                        'Count': count,
-                        'Award_Order': award_order.index(award)  # 用于排序
-                    })
+        fig.update_layout(
+            height=400,
+            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis_tickangle=-45,
+            showlegend=False,
+            paper_bgcolor='white',
+            xaxis_title='菜系',
+            yaxis_title='米其林评级',
+            yaxis={'categoryorder': 'array', 'categoryarray': ['Bib Gourmand', '1 Star', '2 Stars', '3 Stars']}
+        )
         
-        if bubble_data:
-            bubble_df = pd.DataFrame(bubble_data)
-            
-            # 创建气泡图 - 使用动态颜色
-            fig = px.scatter(
-                bubble_df,
-                x='Cuisine',
-                y='Award',
-                size='Count',
-                color='Cuisine',
-                hover_name='Cuisine',
-                hover_data={'Count': True, 'Cuisine': False, 'Award': True},
-                size_max=30,
-                labels={
-                    'Cuisine': '菜系',
-                    'Award': '米其林评级',
-                    'Count': '餐厅数量'
-                },
-                color_discrete_sequence=dynamic_colors  # 使用动态生成的红色系颜色
-            )
-            
-            # 自定义气泡大小范围，确保可视化效果
-            fig.update_traces(
-                marker=dict(
-                    sizemode='area',
-                    sizeref=2.*max(bubble_df['Count'])/(30.**2),
-                    sizemin=4
-                )
-            )
-            
-            fig.update_layout(
-                height=400,
-                margin=dict(l=0, r=0, t=0, b=0),
-                xaxis_tickangle=-45,
-                showlegend=False,
-                paper_bgcolor='white',
-                xaxis_title='菜系',
-                yaxis_title='米其林评级',
-                yaxis={'categoryorder': 'array', 'categoryarray': award_order}
-            )
-            
-            # 改进悬停信息显示
-            fig.update_traces(
-                hovertemplate="<br>".join([
-                    "菜系: %{x}",
-                    "评级: %{y}",
-                    "餐厅数量: %{marker.size}",
-                    "<extra></extra>"
-                ])
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("暂无菜系与评级数据")
+        # 改进悬停信息显示
+        fig.update_traces(
+            hovertemplate="<br>".join([
+                "菜系: %{x}",
+                "评级: %{y}",
+                "餐厅数量: %{marker.size}",
+                "<extra></extra>"
+            ])
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
     
-# 第二行：价格分析和星级评分
+    # 第二行：价格分析和星级评分
     col1, col2 = st.columns(2)
-
+    
     with col1:
         st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系平均价格等级</h3>', unsafe_allow_html=True)
-
-    # 使用统一统计数据
+    
+        # 使用统一统计数据
         sorted_price_stats = cuisine_stats_df.sort_values('Avg_Price_Level', ascending=False)
-    
-    # 保留两位小数
+        
+        # 保留两位小数
         sorted_price_stats['Avg_Price_Level'] = sorted_price_stats['Avg_Price_Level'].round(2)
-    
+        
         fig = px.bar(
             sorted_price_stats,
             x='Cuisine',
@@ -807,7 +811,7 @@ if not cuisine_stats_df.empty:
             color='Avg_Price_Level',
             color_continuous_scale=COLOR_SCALES['price_scale']
         )
-    
+        
         # 更新图表布局，设置中文标签
         fig.update_layout(
             height=400,
@@ -823,7 +827,7 @@ if not cuisine_stats_df.empty:
                 title='平均价格等级'
             )
         )
-    
+        
         # 更新悬停信息为中文
         fig.update_traces(
             hovertemplate=(
@@ -832,12 +836,12 @@ if not cuisine_stats_df.empty:
                 "<extra></extra>"
             )
         )
-    
+        
         # 更新y轴格式显示两位小数
         fig.update_yaxes(tickformat=".2f")
-    
-        st.plotly_chart(fig, use_container_width=True)
         
+        st.plotly_chart(fig, use_container_width=True)
+            
     with col2:
         st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系星级评分分布</h3>', unsafe_allow_html=True)
         
@@ -847,7 +851,7 @@ if not cuisine_stats_df.empty:
         # 保留两位小数
         sorted_award_stats['Avg_Award_Score'] = sorted_award_stats['Avg_Award_Score'].round(2)
         sorted_award_stats['Starred_Percentage'] = sorted_award_stats['Starred_Percentage'].round(1)
-    
+        
         # 创建散点图 - 修复悬停信息问题
         fig = px.scatter(
             sorted_award_stats,
@@ -872,8 +876,8 @@ if not cuisine_stats_df.empty:
             },
             color_continuous_scale=COLOR_SCALES['sequential']
         )
-    
-    # 自定义气泡大小范围
+        
+        # 自定义气泡大小范围
         fig.update_traces(
             marker=dict(
                 sizemode='area',
@@ -883,7 +887,7 @@ if not cuisine_stats_df.empty:
                 line=dict(width=1, color='white')
             )
         )
-    
+        
         fig.update_layout(
             height=400,
             margin=dict(l=0, r=0, t=0, b=0),
@@ -893,7 +897,7 @@ if not cuisine_stats_df.empty:
             xaxis_title='菜系',
             yaxis_title='平均星级评分'
         )
-    
+        
         # 修复悬停信息显示 - 确保有星级餐厅数量显示为整数
         fig.update_traces(
             hovertemplate=(
@@ -904,10 +908,10 @@ if not cuisine_stats_df.empty:
                 "<extra></extra>"
             )
         )
-    
+        
         # 更新y轴格式显示两位小数
         fig.update_yaxes(tickformat=".2f")
-    
+        
         st.plotly_chart(fig, use_container_width=True)
     
     # 第三行：综合关系气泡图
@@ -945,106 +949,6 @@ if not cuisine_stats_df.empty:
 
 else:
     st.info("暂无菜系数据")
-
-# --- 【新增】设施与评级/价格分析 ---
-st.markdown('<h2 class="section-header">🏨 设施与评级/价格分析</h2>', unsafe_allow_html=True)
-
-if not filtered_df.empty:
-    # 准备用于分析的数据
-    facility_df = filtered_df.explode('Facilities_list')
-    
-    # 获取最常见的15个设施进行分析，避免图表过于拥挤
-    top_n_facilities = 15
-    if not facility_df.empty and 'Facilities_list' in facility_df.columns and facility_df['Facilities_list'].notna().any():
-        common_facilities = facility_df['Facilities_list'].value_counts().nlargest(top_n_facilities).index.tolist()
-        
-        # 1. 分组条形图
-        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">不同星级餐厅的设施分布 (热门设施)</h3>', unsafe_allow_html=True)
-        
-        analysis_df = facility_df[facility_df['Facilities_list'].isin(common_facilities)]
-        award_order = ['1 Star', '2 Stars', '3 Stars'] # 仅关注星级餐厅
-        analysis_df = analysis_df[analysis_df['Award'].isin(award_order)]
-
-        if not analysis_df.empty:
-            facility_award_counts = analysis_df.groupby(['Facilities_list', 'Award']).size().reset_index(name='Count')
-            
-            fig_bar = px.bar(
-                facility_award_counts,
-                x='Facilities_list',
-                y='Count',
-                color='Award',
-                barmode='group',
-                labels={'Facilities_list': '设施', 'Count': '餐厅数量', 'Award': '米其林评级'},
-                title='热门设施在不同星级餐厅中的数量',
-                category_orders={'Award': award_order, 'Facilities_list': common_facilities},
-                color_discrete_map={ # 适配为红色系
-                    '1 Star': '#f1948a',  # 浅红
-                    '2 Stars': '#e74c3c',  # 主红
-                    '3 Stars': '#a52a2a'   # 深红
-                }
-            )
-            fig_bar.update_layout(xaxis_tickangle=-45, paper_bgcolor='white', yaxis_title='餐厅数量', xaxis_title=None)
-            st.plotly_chart(fig_bar, use_container_width=True)
-        else:
-            st.info("根据当前筛选条件，没有足够的星级餐厅设施数据来生成分组条形图。")
-
-        # 2. 热力图
-        st.markdown('<h3 style="color: #34495e; margin-top: 2rem; margin-bottom: 1rem;">设施在不同评级/价格中的普及率</h3>', unsafe_allow_html=True)
-        heatmap_axis = st.radio(
-            "选择热力图分析维度", ('米其林星级', '价格等级'),
-            horizontal=True, key='heatmap_toggle'
-        )
-
-        # 确保 heatmap_df 中有有效的设施列表
-        heatmap_df = filtered_df.dropna(subset=['Facilities_list'])
-        heatmap_df = heatmap_df[heatmap_df['Facilities_list'].apply(lambda x: isinstance(x, list) and len(x) > 0 and any(fac in common_facilities for fac in x))]
-        
-        if not heatmap_df.empty:
-            if heatmap_axis == '米其林星级':
-                columns = ['1 Star', '2 Stars', '3 Stars']
-                heatmap_data = pd.DataFrame(index=common_facilities, columns=columns).fillna(0.0)
-
-                for award in columns:
-                    total_restaurants = len(heatmap_df[heatmap_df['Award'] == award])
-                    if total_restaurants > 0:
-                        for facility in common_facilities:
-                            count_with_facility = len(heatmap_df[(heatmap_df['Award'] == award) & (heatmap_df['Facilities_list'].apply(lambda x: facility in x))])
-                            heatmap_data.loc[facility, award] = (count_with_facility / total_restaurants) * 100
-                
-                title = '设施在不同星级餐厅中的普及率 (%)'
-                xaxis_title = '米其林评级'
-            
-            else: # 价格等级
-                columns = sorted(heatmap_df['Price_level'].dropna().unique().astype(int))
-                heatmap_data = pd.DataFrame(index=common_facilities, columns=columns).fillna(0.0)
-
-                for price_level in columns:
-                    total_restaurants = len(heatmap_df[heatmap_df['Price_level'] == price_level])
-                    if total_restaurants > 0:
-                        for facility in common_facilities:
-                            count_with_facility = len(heatmap_df[(heatmap_df['Price_level'] == price_level) & (heatmap_df['Facilities_list'].apply(lambda x: facility in x))])
-                            heatmap_data.loc[facility, price_level] = (count_with_facility / total_restaurants) * 100
-                
-                title = '设施在不同价格等级餐厅中的普及率 (%)'
-                xaxis_title = '价格等级'
-
-            fig_heatmap = px.imshow(
-                heatmap_data,
-                text_auto=".0f",
-                aspect="auto",
-                labels=dict(x=xaxis_title, y="设施", color="普及率 (%)"),
-                title=title,
-                color_continuous_scale=COLOR_SCALES['sequential'] # 使用红色系
-            )
-            fig_heatmap.update_layout(paper_bgcolor='white', yaxis={'tickmode': 'array', 'tickvals': common_facilities, 'autorange': 'reversed'})
-            fig_heatmap.update_traces(hovertemplate='设施: %{y}<br>' + xaxis_title + ': %{x}<br>普及率: %{z:.1f}%<extra></extra>')
-            st.plotly_chart(fig_heatmap, use_container_width=True)
-        else:
-            st.info("根据当前筛选条件，没有足够的设施数据来生成热力图。")
-    else:
-        st.info("当前筛选条件下，餐厅不包含可分析的设施信息。")
-else:
-    st.info("请调整筛选条件以查看设施分析。")
 
 # 数据表格
 st.markdown('<h2 class="section-header">📋 餐厅详情</h2>', unsafe_allow_html=True)
@@ -1098,5 +1002,3 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-
-
