@@ -789,7 +789,7 @@ if not cuisine_stats_df.empty:
             st.info("暂无菜系与评级数据")
     
 # 第二行：价格分析和星级评分
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
     with col1:
         st.markdown(f'<h3 style="color: #34495e; margin-bottom: 1rem;">前{top_n_cuisines}菜系平均价格等级</h3>', unsafe_allow_html=True)
@@ -1098,4 +1098,5 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
