@@ -897,7 +897,6 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
                 "<b>%{x}</b><br>" +
                 "平均星级评分: %{y:.2f}<br>" +
                 "总餐厅数量: %{marker.size}<br>" +
-                "有星级餐厅: %{customdata[2]:.0f}<br>" +  # 使用 :.0f 格式确保显示为整数
                 "<extra></extra>"
             )
         )
@@ -949,7 +948,6 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
             "平均价格等级: %{x:.2f}<br>" +
             "平均星级评分: %{y:.2f}<br>" +
             "餐厅数量: %{marker.size}<br>" +
-            "有星级餐厅: %{customdata[3]:.0f}<br>" +
             "<extra></extra>"
         )
     )
@@ -1023,3 +1021,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
