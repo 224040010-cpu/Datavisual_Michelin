@@ -977,6 +977,189 @@ if not distribution_df.empty and not cuisine_stats_df.empty:
 else:
     st.info("暂无菜系数据")
 
+# --- 【新增】星级价格分布与奢华餐厅占比分析 ---
+st.markdown('<h2 class="section-header">💰 星级价格分布与奢华餐厅分析</h2>', unsafe_allow_html=True)
+
+if not filtered_df.empty:
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">各星级价格区间分布</h3>', unsafe_allow_html=True)
+
+        # 准备数据：星级 vs 价格等级的交叉表
+        award_price_cross = pd.crosstab(
+            filtered_df['Award'],
+            filtered_df['Price_level'],
+            normalize='index'
+        ).round(4) * 100  # 转换为百分比
+
+        # 只保留有数据的星级
+        award_price_cross = award_price_cross.loc[award_price_cross.sum(axis=1) > 0]
+
+        if not award_price_cross.empty:
+            # 创建100%堆叠条形图
+            fig_stacked = go.Figure()
+
+            # 价格等级描述映射
+            price_level_names = {
+                1: "经济型 (¥)",
+                2: "中价位 (¥¥)",
+                3: "高消费 (¥¥¥)",
+                4: "奢华型 (¥¥¥¥)"
+            }
+
+            # 动态生成红色系颜色
+            price_colors = generate_red_colors(len(award_price_cross.columns))
+
+            # 为每个价格等级添加一个条形
+            for i, price_level in enumerate(award_price_cross.columns):
+                price_level_name = price_level_names.get(price_level, f"等级{price_level}")
+
+                fig_stacked.add_trace(go.Bar(
+                    name=price_level_name,
+                    x=award_price_cross.index,
+                    y=award_price_cross[price_level],
+                    marker_color=price_colors[i],
+                    hovertemplate=(
+                            "<b>%{x}</b><br>" +
+                            f"价格等级: {price_level_name}<br>" +
+                            "占比: %{y:.1f}%<br>" +
+                            "<extra></extra>"
+                    )
+                ))
+
+            # 更新布局
+            fig_stacked.update_layout(
+                barmode='stack',
+                height=400,
+                margin=dict(l=0, r=0, t=30, b=0),
+                paper_bgcolor='white',
+                showlegend=True,
+                xaxis_title="米其林评级",
+                yaxis_title="占比 (%)",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
+            )
+
+            # 设置y轴范围确保显示0-100%
+            fig_stacked.update_yaxes(range=[0, 100])
+
+            # 添加百分比标签（选择性显示，避免过于拥挤）
+            fig_stacked.update_traces(
+                texttemplate='%{y:.0f}%',
+                textposition='inside',
+                insidetextanchor='middle'
+            )
+
+            st.plotly_chart(fig_stacked, use_container_width=True)
+        else:
+            st.info("当前筛选条件下无星级价格分布数据")
+
+    with col2:
+        st.markdown('<h3 style="color: #34495e; margin-bottom: 1rem;">奢华餐厅占比城市排名</h3>',
+                    unsafe_allow_html=True)
+
+        # 计算各城市奢华餐厅占比
+        if len(filtered_df) > 0:
+            # 定义奢华餐厅（价格等级4）
+            luxury_threshold = 4
+
+            # 按城市分组计算
+            city_stats = filtered_df.groupby('City').agg({
+                'Name': 'count',  # 总餐厅数
+                'Price_level': lambda x: (x == luxury_threshold).sum()  # 奢华餐厅数
+            }).rename(columns={'Name': 'total_restaurants', 'Price_level': 'luxury_count'})
+
+            # 计算奢华占比
+            city_stats['luxury_ratio'] = (city_stats['luxury_count'] / city_stats['total_restaurants'] * 100).round(2)
+
+            # 过滤掉餐厅数量太少的城市（至少2家）
+            city_stats = city_stats[city_stats['total_restaurants'] >= 2]
+
+            # 按奢华占比排序
+            city_stats = city_stats.sort_values('luxury_ratio', ascending=False)
+
+            if not city_stats.empty:
+                # 分页设置
+                cities_per_page = 10
+                total_pages = max(1, (len(city_stats) + cities_per_page - 1) // cities_per_page)
+
+                # 分页控件
+                page_col1, page_col2, page_col3 = st.columns([1, 2, 1])
+                with page_col2:
+                    page_number = st.number_input(
+                        "页码",
+                        min_value=1,
+                        max_value=total_pages,
+                        value=1,
+                        step=1,
+                        key="luxury_page"
+                    )
+
+                # 计算当前页的数据范围
+                start_idx = (page_number - 1) * cities_per_page
+                end_idx = min(start_idx + cities_per_page, len(city_stats))
+                current_page_data = city_stats.iloc[start_idx:end_idx]
+
+                # 创建水平条形图
+                fig_luxury = px.bar(
+                    current_page_data.reset_index(),
+                    x='luxury_ratio',
+                    y='City',
+                    orientation='h',
+                    labels={
+                        'luxury_ratio': '奢华餐厅占比 (%)',
+                        'City': '城市',
+                        'total_restaurants': '餐厅总数'
+                    },
+                    hover_data={
+                        'total_restaurants': True,
+                        'luxury_count': True
+                    },
+                    color='luxury_ratio',
+                    color_continuous_scale=COLOR_SCALES['sequential']
+                )
+
+                # 更新布局
+                fig_luxury.update_layout(
+                    height=400,
+                    margin=dict(l=0, r=0, t=30, b=0),
+                    paper_bgcolor='white',
+                    showlegend=False,
+                    xaxis_title="奢华餐厅占比 (%)",
+                    yaxis_title="城市",
+                    yaxis={'categoryorder': 'total ascending'}
+                )
+
+                # 更新悬停信息
+                fig_luxury.update_traces(
+                    hovertemplate=(
+                            "<b>%{y}</b><br>" +
+                            "奢华餐厅占比: %{x:.1f}%<br>" +
+                            "奢华餐厅数量: %{customdata[1]}<br>" +
+                            "总餐厅数量: %{customdata[0]}<br>" +
+                            "<extra></extra>"
+                    )
+                )
+
+                st.plotly_chart(fig_luxury, use_container_width=True)
+
+                # 显示分页信息
+                st.caption(
+                    f"显示 {start_idx + 1}-{end_idx} 个城市，共 {len(city_stats)} 个城市 (第 {page_number}/{total_pages} 页)")
+            else:
+                st.info("当前筛选条件下无足够的城市数据进行奢华餐厅分析")
+        else:
+            st.info("请调整筛选条件以查看奢华餐厅分析")
+else:
+    st.info("请调整筛选条件以查看分析数据")
+
+# --- 【新增】设施与评级/价格分析 ---
 # --- 【新增】设施与评级/价格分析 ---
 st.markdown('<h2 class="section-header">🏨 设施与评级/价格分析</h2>', unsafe_allow_html=True)
 
